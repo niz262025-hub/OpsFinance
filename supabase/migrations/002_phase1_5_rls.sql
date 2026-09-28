@@ -5,7 +5,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select exists (
     select 1
@@ -20,7 +20,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select exists (
     select 1
@@ -30,6 +30,96 @@ as $$
       and bm.role in ('OWNER', 'ADMIN')
   );
 $$;
+
+create or replace function public.manage_business_membership(
+  p_business_id uuid,
+  p_target_user_id uuid,
+  p_target_role public.membership_role_enum
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor_role public.membership_role_enum;
+begin
+  if auth.uid() is null or p_business_id is null or p_target_user_id is null or p_target_role is null then
+    raise exception 'Authenticated membership details are required.';
+  end if;
+
+  if p_target_user_id = auth.uid() then
+    raise exception 'Users cannot manage their own membership.';
+  end if;
+
+  select bm.role into v_actor_role
+  from public.business_members bm
+  where bm.business_id = p_business_id
+    and bm.user_id = auth.uid();
+
+  if not found or v_actor_role not in ('OWNER', 'ADMIN') then
+    raise exception 'Business owner or admin membership required.';
+  end if;
+
+  if v_actor_role = 'ADMIN' and p_target_role not in ('ACCOUNTANT', 'STAFF', 'VIEWER') then
+    raise exception 'Admins cannot grant owner or admin roles.';
+  end if;
+
+  insert into public.business_members (business_id, user_id, role)
+  values (p_business_id, p_target_user_id, p_target_role)
+  on conflict (business_id, user_id)
+  do update set role = excluded.role;
+end;
+$$;
+
+create or replace function public.create_business_with_owner(
+  p_name text,
+  p_registration_no text default null,
+  p_address text default null,
+  p_phone text default null,
+  p_email text default null,
+  p_base_currency text default 'MYR',
+  p_fiscal_year_start text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_business_id uuid;
+begin
+  if v_user_id is null then
+    raise exception 'Authenticated user required to create a business.';
+  end if;
+
+  if not exists (select 1 from public.users u where u.id = v_user_id) then
+    raise exception 'Authenticated user profile required to create a business.';
+  end if;
+
+  insert into public.businesses (
+    name, registration_no, address, phone, email, base_currency, fiscal_year_start
+  ) values (
+    p_name, p_registration_no, p_address, p_phone, p_email, p_base_currency, p_fiscal_year_start
+  )
+  returning id into v_business_id;
+
+  insert into public.business_members (business_id, user_id, role)
+  values (v_business_id, v_user_id, 'OWNER');
+
+  return v_business_id;
+end;
+$$;
+
+revoke all on function public.is_authorized_for_business(uuid) from public;
+revoke all on function public.is_business_owner_or_admin(uuid) from public;
+revoke all on function public.manage_business_membership(uuid, uuid, public.membership_role_enum) from public;
+revoke all on function public.create_business_with_owner(text, text, text, text, text, text, text) from public;
+grant execute on function public.is_authorized_for_business(uuid) to authenticated;
+grant execute on function public.is_business_owner_or_admin(uuid) to authenticated;
+grant execute on function public.manage_business_membership(uuid, uuid, public.membership_role_enum) to authenticated;
+grant execute on function public.create_business_with_owner(text, text, text, text, text, text, text) to authenticated;
 
 alter table public.users enable row level security;
 create policy "Users can read own profile"
@@ -54,11 +144,6 @@ on public.businesses
 for select
 using (public.is_authorized_for_business(id));
 
-create policy "Authenticated users can create business"
-on public.businesses
-for insert
-with check (auth.role() = 'authenticated');
-
 create policy "Business owners/admins can update business"
 on public.businesses
 for update
@@ -79,29 +164,16 @@ using (
   or public.is_authorized_for_business(business_id)
 );
 
-create policy "Users can join their own membership"
+create policy "Membership inserts require authorized RPC"
 on public.business_members
 for insert
-with check (
-  user_id = auth.uid()
-  or public.is_business_owner_or_admin(business_id)
-);
+with check (false);
 
-create policy "Owner/admin can manage memberships"
+create policy "Membership updates require authorized RPC"
 on public.business_members
 for update
-using (
-  auth.uid() = user_id
-  or public.is_business_owner_or_admin(business_id)
-)
-with check (
-  auth.uid() = user_id
-  or (
-    public.is_business_owner_or_admin(business_id)
-    and role in ('OWNER', 'ADMIN', 'ACCOUNTANT', 'STAFF', 'VIEWER')
-    and user_id is not null
-  )
-);
+using (false)
+with check (false);
 
 create policy "Membership records are not deleted"
 on public.business_members

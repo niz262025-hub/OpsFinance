@@ -53,4 +53,39 @@ describe('Phase 10A supabase foundation', () => {
     expect(migration).toContain('journal_entries');
     expect(migration).toContain('journal_lines');
   });
+
+  it('blocks updates and deletes of posted journal entries while allowing posting', () => {
+    const migration = readFileSync(join(process.cwd(), 'supabase/migrations/003_phase10a_supabase_foundation.sql'), 'utf8');
+    const guard = migration.match(/function public\.prevent_posted_journal_mutation\(\)[\s\S]*?\$\$;/i)?.[0] ?? '';
+    const trigger = migration.match(/create trigger journal_entries_prevent_posted_update[\s\S]*?;/i)?.[0] ?? '';
+
+    expect(guard).toContain("if old.status = 'POSTED'");
+    expect(guard).toContain("if tg_op = 'INSERT'");
+    expect(guard).toContain("if tg_op = 'DELETE'");
+    expect(guard).not.toContain('new.journal_entry_id');
+    expect(trigger).toContain('before insert or update or delete on public.journal_entries');
+  });
+
+  it('blocks updates and deletes of lines belonging to posted journals', () => {
+    const migration = readFileSync(join(process.cwd(), 'supabase/migrations/003_phase10a_supabase_foundation.sql'), 'utf8');
+    const guard = migration.match(/function public\.prevent_posted_journal_line_mutation\(\)[\s\S]*?\$\$;/i)?.[0] ?? '';
+    const trigger = migration.match(/create trigger journal_lines_prevent_posted_update[\s\S]*?;/i)?.[0] ?? '';
+
+    expect(guard).toContain('old.journal_entry_id');
+    expect(guard).toContain('new.journal_entry_id');
+    expect(guard).toContain("if tg_op = 'INSERT'");
+    expect(guard).toContain("if tg_op = 'DELETE'");
+    expect(guard).toContain("je.status = 'POSTED'");
+    expect(trigger).toContain('before insert or update or delete on public.journal_lines');
+  });
+
+  it('uses an empty search path for every security-definer migration helper', () => {
+    const migration = readFileSync(join(process.cwd(), 'supabase/migrations/003_phase10a_supabase_foundation.sql'), 'utf8');
+    const functions = migration.split(/create or replace function /i).slice(1);
+
+    expect(functions.length).toBeGreaterThan(0);
+    for (const definition of functions) {
+      expect(definition).toMatch(/security definer[\s\S]*?set search_path = ''/i);
+    }
+  });
 });

@@ -3,7 +3,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select exists (
     select 1
@@ -18,7 +18,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select exists (
     select 1
@@ -34,7 +34,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select exists (
     select 1
@@ -49,7 +49,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select exists (
     select 1
@@ -63,19 +63,28 @@ create or replace function public.prevent_posted_journal_mutation()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
-  if exists (
-    select 1
-    from public.journal_entries je
-    where je.id = coalesce(new.journal_entry_id, old.journal_entry_id)
-      and je.status = 'POSTED'
-  ) then
+  if tg_op = 'INSERT' then
+    if new.status = 'POSTED' then
+      raise exception 'Posted journal entries must be created through the posting workflow.';
+    end if;
+    return new;
+  end if;
+
+  if tg_op = 'DELETE' then
+    if old.status = 'POSTED' then
+      raise exception 'Posted journal entries are immutable';
+    end if;
+    raise exception 'Journal entries cannot be deleted; use a reversal or adjustment.';
+  end if;
+
+  if old.status = 'POSTED' then
     raise exception 'Posted journal entries are immutable';
   end if;
 
-  return coalesce(new, old);
+  return new;
 end;
 $$;
 
@@ -83,31 +92,52 @@ create or replace function public.prevent_posted_journal_line_mutation()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
+  if tg_op = 'INSERT' then
+    if exists (
+      select 1
+      from public.journal_entries je
+      where je.id = new.journal_entry_id
+        and je.status = 'POSTED'
+    ) then
+      raise exception 'Posted journal lines are immutable';
+    end if;
+    return new;
+  end if;
+
+  if tg_op = 'DELETE' then
+    if exists (
+      select 1
+      from public.journal_entries je
+      where je.id = old.journal_entry_id
+        and je.status = 'POSTED'
+    ) then
+      raise exception 'Posted journal lines are immutable';
+    end if;
+    raise exception 'Journal lines cannot be deleted; use a reversal or adjustment.';
+  end if;
+
   if exists (
     select 1
     from public.journal_entries je
-    join public.journal_lines jl on jl.journal_entry_id = je.id
-    where jl.id = coalesce(new.id, old.id)
+    where je.id in (old.journal_entry_id, new.journal_entry_id)
       and je.status = 'POSTED'
   ) then
     raise exception 'Posted journal lines are immutable';
   end if;
 
-  return coalesce(new, old);
+  return new;
 end;
 $$;
 
 create trigger journal_entries_prevent_posted_update
-before update on public.journal_entries
+before insert or update or delete on public.journal_entries
 for each row
-when (old.status = 'POSTED' or new.status = 'POSTED')
 execute function public.prevent_posted_journal_mutation();
 
 create trigger journal_lines_prevent_posted_update
-before update on public.journal_lines
+before insert or update or delete on public.journal_lines
 for each row
-when (old.journal_entry_id is not null)
 execute function public.prevent_posted_journal_line_mutation();
