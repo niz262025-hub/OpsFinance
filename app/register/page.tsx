@@ -1,13 +1,64 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-export default function RegisterPage() {
-  const [status, setStatus] = useState('');
+import { normalizeAuthError } from '../../lib/auth/session';
+import { getSupabaseBrowserClient } from '../../lib/supabase/client';
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setStatus('Registration is available once Supabase credentials are configured.');
+export default function RegisterPage() {
+  const router = useRouter();
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get('email') ?? '').trim();
+    const password = String(formData.get('password') ?? '');
+    const name = String(formData.get('name') ?? '').trim();
+
+    if (!email || !password || !name) {
+      setError('Please provide your name, email, and password.');
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setError('Supabase is not configured in this environment.');
+      return;
+    }
+
+    setPending(true);
+    setError('');
+    setStatus('');
+
+    const { data, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: {
+          full_name: name,
+        },
+      },
+    });
+
+    setPending(false);
+
+    if (authError) {
+      setError(normalizeAuthError(authError));
+      return;
+    }
+
+    if (data.session) {
+      setStatus('Account created successfully.');
+      router.push('/dashboard');
+      return;
+    }
+
+    setStatus('Account created. Please check your email to confirm your account before signing in.');
   };
 
   return (
@@ -27,10 +78,11 @@ export default function RegisterPage() {
             Password
             <input type="password" name="password" style={{ width: '100%', marginTop: 4 }} />
           </label>
-          <button type="submit">Create account</button>
+          <button type="submit" disabled={pending}>{pending ? 'Creating account...' : 'Create account'}</button>
         </div>
       </form>
       {status ? <p>{status}</p> : null}
+      {error ? <p style={{ color: '#b42318' }}>{error}</p> : null}
     </main>
   );
 }
