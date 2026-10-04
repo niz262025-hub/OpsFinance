@@ -2,6 +2,8 @@ import { createBrowserClient } from '@supabase/ssr';
 
 export type SupabaseBrowserClient = ReturnType<typeof createBrowserClient>;
 
+let browserClient: SupabaseBrowserClient | null = null;
+
 export function getSupabaseBrowserClient(): SupabaseBrowserClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -10,11 +12,15 @@ export function getSupabaseBrowserClient(): SupabaseBrowserClient | null {
     return null;
   }
 
-  return createBrowserClient(url, publishableKey, {
-    global: {
-      fetch,
-    },
-  });
+  if (!browserClient) {
+    browserClient = createBrowserClient(url, publishableKey, {
+      global: {
+        fetch,
+      },
+    });
+  }
+
+  return browserClient;
 }
 
 export function isSupabaseBrowserReady(): boolean {

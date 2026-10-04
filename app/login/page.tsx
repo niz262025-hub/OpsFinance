@@ -1,13 +1,12 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { navigateToDashboard } from '../../lib/auth/navigation';
 import { normalizeAuthError } from '../../lib/auth/session';
 import { getSupabaseBrowserClient } from '../../lib/supabase/client';
 
 export default function LoginPage() {
-  const router = useRouter();
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
@@ -44,7 +43,7 @@ export default function LoginPage() {
 
     if (data.session) {
       setStatus('Signed in successfully.');
-      router.push('/dashboard');
+      navigateToDashboard();
       return;
     }
 
