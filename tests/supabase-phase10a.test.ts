@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -8,6 +8,10 @@ import {
   isPostedAccountingStatus,
   validateJournalMutationSafety,
 } from '../packages/supabase-foundation';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('Phase 10A supabase foundation', () => {
   it('reports missing environment config safely when credentials are not configured', () => {
@@ -28,6 +32,12 @@ describe('Phase 10A supabase foundation', () => {
 
   it('accepts a valid business membership context', () => {
     expect(() => assertBusinessMembership({ userId: 'user-1', businessId: 'business-1', memberships: ['business-1'] }, 'business-1')).not.toThrow();
+  });
+
+  it('rejects service-role use in browser-only contexts', async () => {
+    const { assertNoServiceRoleKeyInBrowser } = await import('../lib/supabase/client');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY', 'service-role-key');
+    expect(() => assertNoServiceRoleKeyInBrowser()).toThrow('Service role key must never be used in the browser runtime.');
   });
 
   it('rejects cross-business access in a business-scoped context', () => {
@@ -87,5 +97,15 @@ describe('Phase 10A supabase foundation', () => {
     for (const definition of functions) {
       expect(definition).toMatch(/security definer[\s\S]*?set search_path = ''/i);
     }
+  });
+
+  it('documents the durable accounting idempotency and atomic posting contract in the next migration', () => {
+    const migration = readFileSync(join(process.cwd(), 'supabase/migrations/004_accounting_atomic_persistence.sql'), 'utf8');
+
+    expect(migration).toContain('idempotency_keys');
+    expect(migration).toContain('post_accounting_transaction_atomic');
+    expect(migration).toContain('security definer');
+    expect(migration).toContain("set search_path = ''");
+    expect(migration).toContain('idempotency_key');
   });
 });

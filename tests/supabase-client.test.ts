@@ -53,4 +53,11 @@ describe('Supabase browser client', () => {
     expect(getSupabaseBrowserClient()).toBeNull();
     expect(createBrowserClientMock).not.toHaveBeenCalled();
   });
+
+  it('refuses service-role keys in the browser runtime', async () => {
+    const { assertNoServiceRoleKeyInBrowser } = await import('../lib/supabase/client');
+
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY', 'service-role-key');
+    expect(() => assertNoServiceRoleKeyInBrowser()).toThrow('Service role key must never be used in the browser runtime.');
+  });
 });

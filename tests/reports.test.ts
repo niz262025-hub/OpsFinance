@@ -120,6 +120,20 @@ describe('Phase 6 financial reporting', () => {
     return engine;
   }
 
+  it('can read from an injected repository instead of the in-memory engine maps', () => {
+    const engine = buildEngine();
+    const repository = {
+      getBusinessAccounts: () => [...((engine as any).accounts as Map<string, any>).values()].filter((account) => account.businessId === businessId),
+      getPostedJournals: () => [...((engine as any).journals as Map<string, any>).values()].filter((journal) => journal.businessId === businessId && journal.status === 'POSTED'),
+      getAccount: (_businessId: string, accountId: string) => [...((engine as any).accounts as Map<string, any>).values()].find((account) => account.id === accountId),
+    };
+    const reports = new FinancialReportService(engine, { repository });
+    const trial = reports.getTrialBalance({ businessId, dateFrom: '2026-09-01', dateTo: '2026-09-30' });
+
+    expect(trial.isBalanced).toBe(true);
+    expect(trial.totalDebit).toBe(trial.totalCredit);
+  });
+
   it('builds a general ledger from posted journal lines and keeps a running balance', () => {
     const engine = buildEngine();
     const reports = new FinancialReportService(engine);

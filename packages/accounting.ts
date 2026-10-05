@@ -299,13 +299,35 @@ export function createOpeningBalanceJournal(input: {
   };
 }
 
+export interface IdempotencyStoreLike {
+  has: (key: string) => boolean;
+  get: (key: string) => string | undefined;
+  set: (key: string, value: string) => void;
+}
+
+export class MapIdempotencyStore implements IdempotencyStoreLike {
+  private readonly store = new Map<string, string>();
+
+  has(key: string): boolean {
+    return this.store.has(key);
+  }
+
+  get(key: string): string | undefined {
+    return this.store.get(key);
+  }
+
+  set(key: string, value: string): void {
+    this.store.set(key, value);
+  }
+}
+
 export class AccountingEngine {
   private readonly accounts: Map<string, BusinessAccount>;
   private readonly periods: Map<string, AccountingPeriod>;
   private readonly financialAccounts: Map<string, FinancialAccount>;
   private readonly journals: Map<string, JournalEntry>;
-  private readonly idempotency: Map<string, string>;
-  private readonly sourceIdempotency: Map<string, string>;
+  private readonly idempotency: IdempotencyStoreLike;
+  private readonly sourceIdempotency: IdempotencyStoreLike;
 
   public readonly businessId: string;
 
@@ -314,14 +336,16 @@ export class AccountingEngine {
     accounts: BusinessAccount[];
     periods?: AccountingPeriod[];
     financialAccounts?: FinancialAccount[];
+    idempotencyStore?: IdempotencyStoreLike;
+    sourceIdempotencyStore?: IdempotencyStoreLike;
   }) {
     this.businessId = config.businessId;
     this.accounts = new Map(config.accounts.map((account) => [account.id, account]));
     this.periods = new Map((config.periods ?? []).map((period) => [period.id, period]));
     this.financialAccounts = new Map((config.financialAccounts ?? []).map((account) => [account.id, account]));
     this.journals = new Map();
-    this.idempotency = new Map();
-    this.sourceIdempotency = new Map();
+    this.idempotency = config.idempotencyStore ?? new MapIdempotencyStore();
+    this.sourceIdempotency = config.sourceIdempotencyStore ?? new MapIdempotencyStore();
   }
 
   authorizeBusiness(actualBusinessId: string, expectedBusinessId: string): void {

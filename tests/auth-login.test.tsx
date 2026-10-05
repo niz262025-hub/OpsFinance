@@ -35,17 +35,42 @@ describe('login flow', () => {
   async function submitLogin() {
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'uat@example.test' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'test-only-password' } });
-    fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }).closest('form')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     await waitFor(() => expect(signInWithPasswordMock).toHaveBeenCalledOnce());
   }
 
-  it('navigates deterministically after a successful session', async () => {
+  it('submits valid form values to Supabase exactly once and navigates after a session', async () => {
     signInWithPasswordMock.mockResolvedValue({ data: { session: { user: { id: 'test-user' } } }, error: null });
     render(createElement(LoginPage));
 
     await submitLogin();
 
+    expect(getSupabaseBrowserClientMock).toHaveBeenCalledOnce();
+    expect(signInWithPasswordMock).toHaveBeenCalledWith({
+      email: 'uat@example.test',
+      password: 'test-only-password',
+    });
     expect(navigateToDashboardMock).toHaveBeenCalledOnce();
+  });
+
+  it('starts one sign-in request before showing the pending state', async () => {
+    let resolveSignIn: (result: {
+      data: { session: null };
+      error: { message: string } | null;
+    }) => void = () => {};
+    signInWithPasswordMock.mockReturnValue(new Promise((resolve) => {
+      resolveSignIn = resolve;
+    }));
+    render(createElement(LoginPage));
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'uat@example.test' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'test-only-password' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(signInWithPasswordMock).toHaveBeenCalledOnce();
+    expect((screen.getByRole('button', { name: 'Signing in...' }) as HTMLButtonElement).disabled).toBe(true);
+    resolveSignIn({ data: { session: null }, error: null });
+    expect(await screen.findByText(/no active session was returned/i)).toBeTruthy();
   });
 
   it('does not navigate after an authentication error', async () => {

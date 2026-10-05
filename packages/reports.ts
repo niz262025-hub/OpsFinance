@@ -95,29 +95,65 @@ export interface CashFlowReport {
   closingCash: string;
 }
 
+export interface FinancialReportRepositoryLike {
+  getBusinessAccounts?: (businessId: string) => BusinessAccount[];
+  getPostedJournals?: (businessId: string) => JournalEntry[];
+  getAccount?: (businessId: string, accountId: string) => BusinessAccount | undefined;
+}
+
+export interface FinancialReportServiceOptions {
+  engine?: AccountingEngine;
+  repository?: FinancialReportRepositoryLike;
+}
+
 export class FinancialReportService {
-  constructor(private readonly engine: AccountingEngine) {}
+  private readonly engine: AccountingEngine;
+  private readonly repository?: FinancialReportRepositoryLike;
+
+  constructor(engineOrOptions: AccountingEngine | FinancialReportServiceOptions = new AccountingEngine({ businessId: '', accounts: [] }), options: FinancialReportServiceOptions = {}) {
+    if (engineOrOptions instanceof AccountingEngine) {
+      this.engine = engineOrOptions;
+      this.repository = options.repository;
+      return;
+    }
+
+    this.engine = engineOrOptions.engine ?? new AccountingEngine({ businessId: '', accounts: [] });
+    this.repository = engineOrOptions.repository ?? options.repository;
+  }
 
   private getBusinessAccounts(businessId: string): BusinessAccount[] {
+    if (this.repository?.getBusinessAccounts) {
+      return this.repository.getBusinessAccounts(businessId);
+    }
+
     return [...((this.engine as any).accounts as Map<string, BusinessAccount>).values()].filter(
       (account) => account.businessId === businessId,
     );
   }
 
   private getPostedJournals(businessId: string): JournalEntry[] {
+    if (this.repository?.getPostedJournals) {
+      return this.repository.getPostedJournals(businessId);
+    }
+
     return [...((this.engine as any).journals as Map<string, JournalEntry>).values()].filter(
       (journal) => journal.businessId === businessId && journal.status === 'POSTED',
     );
   }
 
   private getAccount(businessId: string, accountId: string): BusinessAccount {
+    const repositoryAccount = this.repository?.getAccount?.(businessId, accountId);
+    if (repositoryAccount) {
+      return repositoryAccount;
+    }
+
     const account = this.getBusinessAccounts(businessId).find((entry) => entry.id === accountId);
     if (!account) throw new Error('Account not found.');
     return account;
   }
 
   private assertBusinessOwnedAccount(businessId: string, accountId: string): void {
-    const account = this.getBusinessAccounts(businessId).find((entry) => entry.id === accountId);
+    const account = this.repository?.getAccount?.(businessId, accountId) ?? this.getBusinessAccounts(businessId).find((entry) => entry.id === accountId);
     if (!account) {
       throw new Error(`Account ${accountId} does not belong to this business.`);
     }

@@ -142,15 +142,41 @@ export interface TransactionRecord {
   auditTrail?: TransactionAuditEvent[];
 }
 
+export interface IdempotencyStoreLike {
+  has: (key: string) => boolean;
+  get: (key: string) => string | undefined;
+  set: (key: string, value: string) => void;
+}
+
+export class MapIdempotencyStore implements IdempotencyStoreLike {
+  private readonly map = new Map<string, string>();
+
+  has(key: string): boolean {
+    return this.map.has(key);
+  }
+
+  get(key: string): string | undefined {
+    return this.map.get(key);
+  }
+
+  set(key: string, value: string): void {
+    this.map.set(key, value);
+  }
+}
+
 export class TransactionService {
   private readonly engine: AccountingEngine;
   private readonly transactions = new Map<string, TransactionRecord>();
-  private readonly idempotency = new Map<string, string>();
+  private readonly idempotency: IdempotencyStoreLike;
   private readonly subscriptionService?: SubscriptionService;
 
-  constructor(engine: AccountingEngine, options: { subscriptionService?: SubscriptionService } = {}) {
+  constructor(
+    engine: AccountingEngine,
+    options: { subscriptionService?: SubscriptionService; idempotencyStore?: IdempotencyStoreLike } = {},
+  ) {
     this.engine = engine;
     this.subscriptionService = options.subscriptionService;
+    this.idempotency = options.idempotencyStore ?? new MapIdempotencyStore();
   }
 
   private assertEntitled(businessId: string, feature: BillingFeature, actor?: string): void {
