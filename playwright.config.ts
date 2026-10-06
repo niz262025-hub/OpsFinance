@@ -1,5 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const webServerEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([, value]) => value !== undefined),
+) as Record<string, string>;
+
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30_000,
@@ -24,6 +28,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run dev',
+    env: webServerEnv,
     url: 'http://127.0.0.1:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
