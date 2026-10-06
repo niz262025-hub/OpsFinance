@@ -50,7 +50,7 @@ test.describe(E2E_ENVIRONMENT, () => {
     await authenticateWithUat(page);
 
     await page.goto('/transactions');
-    await expect(page.getByText('All Transactions')).toBeVisible();
+    await expect(page.getByRole('navigation').getByRole('link', { name: 'All Transactions', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Money In', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Money Out', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Transfer', exact: true })).toBeVisible();

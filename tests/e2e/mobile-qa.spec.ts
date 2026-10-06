@@ -29,7 +29,7 @@ test.describe(E2E_ENVIRONMENT, () => {
     await expect(page.getByText('Authentication foundation')).not.toBeVisible();
 
     await page.goto('/transactions');
-    await expect(page.getByText('All Transactions')).toBeVisible();
+    await expect(page.getByRole('navigation').getByRole('link', { name: 'All Transactions', exact: true })).toBeVisible();
     await page.goto('/upload');
     await expect(page.getByRole('heading', { name: 'Upload & Convert' })).toBeVisible();
     await page.goto('/settings/subscription');
