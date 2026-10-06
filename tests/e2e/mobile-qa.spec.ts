@@ -19,11 +19,15 @@ async function authenticateWithUat(page: any) {
 }
 
 test.describe(E2E_ENVIRONMENT, () => {
-  test('mobile viewport renders critical flows without crashing', async ({ page }) => {
+  test('mobile viewport renders critical authenticated flows without crashing', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await authenticateWithUat(page);
+
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'OpsFinance' })).toBeVisible();
+    await page.waitForURL(/\/dashboard(?:\?|$)/, { timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: /OpsFinance Dashboard/i })).toBeVisible();
+    await expect(page.getByText('Authentication foundation')).not.toBeVisible();
+
     await page.goto('/transactions');
     await expect(page.getByText('All Transactions')).toBeVisible();
     await page.goto('/upload');

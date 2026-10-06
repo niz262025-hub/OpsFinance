@@ -33,12 +33,21 @@ export async function middleware(request: NextRequest) {
   });
 
   const pathname = request.nextUrl.pathname;
+  const isRootPath = pathname === '/';
   const isPublicPath = PUBLIC_PATHS.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
   const isProtectedPath = PROTECTED_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  if (isRootPath) {
+    if (!user) {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
 
   if (isProtectedPath && !user) {
     return NextResponse.redirect(new URL('/login', request.url));

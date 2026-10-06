@@ -47,6 +47,22 @@ describe('auth middleware session boundary', () => {
     expect(response.status).toBe(200);
   });
 
+  it('redirects the root route to login when no user is present', async () => {
+    const response = await middleware(new NextRequest('http://localhost/'));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/login');
+  });
+
+  it('redirects the root route to dashboard when a user is present', async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: 'test-user' } } });
+
+    const response = await middleware(new NextRequest('http://localhost/'));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/dashboard');
+  });
+
   it.each(['/login', '/register'])('leaves public route %s accessible without a user', async (path) => {
     const response = await middleware(new NextRequest(`http://localhost${path}`));
 

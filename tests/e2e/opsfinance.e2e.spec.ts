@@ -20,21 +20,30 @@ async function authenticateWithUat(page: any) {
 }
 
 test.describe(E2E_ENVIRONMENT, () => {
-  test('auth protected route placeholder and landing route render', async ({ page }) => {
+  test('root route redirects to login and the login screen renders', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'OpsFinance' })).toBeVisible();
-    await page.getByRole('link', { name: 'Login' }).click();
+    await page.waitForURL(/\/login(?:\?|$)/, { timeout: 15_000 });
     await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible();
   });
 
-  test('business access and settings navigation are available in the mock environment', async ({ page }) => {
+  test('authenticated root redirects to dashboard and protected settings flows remain accessible', async ({ page }) => {
     await authenticateWithUat(page);
 
     await page.goto('/');
-    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await page.waitForURL(/\/dashboard(?:\?|$)/, { timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: /OpsFinance Dashboard/i })).toBeVisible();
+    await expect(page.getByText('Authentication foundation')).not.toBeVisible();
+
+    await page.goto('/settings');
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
-    await page.getByRole('link', { name: 'Subscription', exact: true }).click();
+
+    await page.goto('/settings/subscription');
     await expect(page.getByRole('heading', { name: /OpsFinance current plan/i })).toBeVisible();
+
+    await page.goto('/dashboard');
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await page.waitForURL(/\/login(?:\?|$)/, { timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible();
   });
 
   test('money in, money out, transfer, upload, reconciliation, and reports screens load', async ({ page }) => {
