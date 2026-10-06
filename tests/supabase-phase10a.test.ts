@@ -99,8 +99,8 @@ describe('Phase 10A supabase foundation', () => {
     }
   });
 
-  it('documents the durable accounting idempotency and atomic posting contract in the next migration', () => {
-    const migration = readFileSync(join(process.cwd(), 'supabase/migrations/004_accounting_atomic_persistence.sql'), 'utf8');
+  it('documents the durable accounting idempotency and atomic posting contract in the active migration', () => {
+    const migration = readFileSync(join(process.cwd(), 'supabase/migrations/005_accounting_atomic_persistence.sql'), 'utf8');
 
     expect(migration).toContain('idempotency_keys');
     expect(migration).toContain('post_accounting_transaction_atomic');

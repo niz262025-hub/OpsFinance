@@ -53,6 +53,30 @@ describe('login flow', () => {
     expect(navigateToDashboardMock).toHaveBeenCalledOnce();
   });
 
+  it('prevents native get navigation and calls Supabase sign-in on submit', async () => {
+    signInWithPasswordMock.mockResolvedValue({ data: { session: { user: { id: 'test-user' } } }, error: null });
+    window.history.replaceState({}, '', '/login');
+    render(createElement(LoginPage));
+
+    const submitButton = screen.getByRole('button', { name: 'Sign in' });
+    const form = submitButton.closest('form');
+    expect(form).not.toBeNull();
+    expect((submitButton as HTMLButtonElement).type).toBe('submit');
+    expect(form?.getAttribute('action')).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'uat@example.test' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'test-only-password' } });
+    fireEvent.submit(form as HTMLFormElement);
+
+    await waitFor(() => expect(signInWithPasswordMock).toHaveBeenCalledTimes(1));
+    expect(window.location.pathname).toBe('/login');
+    expect(window.location.search).toBe('');
+    expect(signInWithPasswordMock).toHaveBeenCalledWith({
+      email: 'uat@example.test',
+      password: 'test-only-password',
+    });
+  });
+
   it('starts one sign-in request before showing the pending state', async () => {
     let resolveSignIn: (result: {
       data: { session: null };

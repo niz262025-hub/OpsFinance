@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { BusinessService } from '../packages/business';
+import { resolveAuthorizedBusinessId, selectCurrentBusiness } from '../lib/auth/business';
 
 const sampleBusiness = {
   id: 'business-001',
@@ -88,5 +89,28 @@ describe('business profile service', () => {
       userId: 'owner-user',
       email: 'invalid',
     })).toThrow('Business email is invalid');
+  });
+
+  it('resolves the current business for an authorized user', () => {
+    const businesses = [
+      { id: 'business-a', name: 'Business A', ownerId: 'owner-a', userIds: ['owner-a'] },
+      { id: 'business-b', name: 'Business B', ownerId: 'owner-b', userIds: ['owner-b'] },
+    ];
+
+    expect(selectCurrentBusiness(businesses, 'owner-a')?.id).toBe('business-a');
+  });
+
+  it('returns null when the user has no authorized business', () => {
+    const businesses = [{ id: 'business-a', name: 'Business A', ownerId: 'owner-2', userIds: ['owner-2'] }];
+
+    expect(selectCurrentBusiness(businesses, 'owner-1')).toBeNull();
+  });
+
+  it('rejects a client-specified business outside the user membership', () => {
+    expect(() => resolveAuthorizedBusinessId('owner-a', ['business-a'], 'business-b')).toThrow('Business access denied.');
+  });
+
+  it('allows an owner to access their own business', () => {
+    expect(resolveAuthorizedBusinessId('owner-a', ['business-a'], 'business-a')).toBe('business-a');
   });
 });

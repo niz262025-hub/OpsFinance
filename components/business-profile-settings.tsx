@@ -1,104 +1,140 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import { BusinessService, type UpdateBusinessProfileInput } from '../packages/business';
-import type { Business } from '../packages/types';
+import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
-const BUSINESS_ID = 'business-001';
-const AUTH_USER_ID = 'user-owner';
-
-const defaultBusiness: Business = {
-  id: BUSINESS_ID,
-  name: 'OpsFinance Malaysia',
-  registrationNo: 'M2012345678',
-  address: 'Kuala Lumpur, Malaysia',
-  phone: '+603-1234 5678',
-  email: 'hello@opsfinance.local',
-  baseCurrency: 'MYR',
-  fiscalYearStart: '2026-01-01',
-  createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-15T00:00:00.000Z',
+export type BusinessProfileSettingsProps = {
+  businessId: string | null;
+  businessContextError?: string | null;
 };
 
-export function BusinessProfileSettings() {
-  const service = useMemo(() => {
-    const next = new BusinessService([defaultBusiness]);
-    return next;
-  }, []);
-
-  const [business, setBusiness] = useState<Business>(() => service.getBusinessProfile({ businessId: BUSINESS_ID, userId: AUTH_USER_ID }));
+export function BusinessProfileSettings({ businessId, businessContextError }: BusinessProfileSettingsProps) {
   const [form, setForm] = useState({
-    name: business.name,
-    registrationNo: business.registrationNo ?? '',
-    address: business.address ?? '',
-    phone: business.phone ?? '',
-    email: business.email ?? '',
-    baseCurrency: business.baseCurrency,
-    fiscalYearStart: business.fiscalYearStart ?? '',
+    name: '',
+    registrationNo: '',
+    address: '',
+    phone: '',
+    email: '',
+    baseCurrency: 'MYR',
+    fiscalYearStart: '',
   });
+  const [updatedAt, setUpdatedAt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const loadProfile = () => {
+  const loadProfile = useCallback(async () => {
+    if (!businessId) {
+      setError('No current business is available for this user.');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
-    try {
-      const profile = service.getBusinessProfile({ businessId: BUSINESS_ID, userId: AUTH_USER_ID });
-      setBusiness(profile);
-      setForm({
-        name: profile.name,
-        registrationNo: profile.registrationNo ?? '',
-        address: profile.address ?? '',
-        phone: profile.phone ?? '',
-        email: profile.email ?? '',
-        baseCurrency: profile.baseCurrency,
-        fiscalYearStart: profile.fiscalYearStart ?? '',
-      });
-    } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Unable to load profile.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    setSuccess(null);
 
-  const handleSave = () => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setError('Supabase is not configured in this environment.');
+      setIsLoading(false);
+      return;
+    }
+
+    const { data, error: fetchError } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('id', businessId)
+      .maybeSingle();
+
+    if (fetchError) {
+      setError(fetchError.message ?? 'Unable to load the business profile.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!data) {
+      setError('No business record is available for this user.');
+      setIsLoading(false);
+      return;
+    }
+
+    setForm({
+      name: data.name ?? '',
+      registrationNo: data.registration_no ?? '',
+      address: data.address ?? '',
+      phone: data.phone ?? '',
+      email: data.email ?? '',
+      baseCurrency: data.base_currency ?? 'MYR',
+      fiscalYearStart: data.fiscal_year_start ?? '',
+    });
+    setUpdatedAt(data.updated_at ?? '');
+    setIsLoading(false);
+  }, [businessId]);
+
+  useEffect(() => {
+    void loadProfile();
+  }, [loadProfile]);
+
+  const handleSave = async () => {
+    if (!businessId) {
+      setError('No current business is available for this user.');
+      return;
+    }
+
     setIsSaving(true);
     setError(null);
     setSuccess(null);
 
-    try {
-      const payload: UpdateBusinessProfileInput = {
-        businessId: BUSINESS_ID,
-        userId: AUTH_USER_ID,
-        name: form.name,
-        registrationNo: form.registrationNo || null,
-        address: form.address || null,
-        phone: form.phone || null,
-        email: form.email || null,
-        baseCurrency: form.baseCurrency,
-        fiscalYearStart: form.fiscalYearStart || null,
-      };
-
-      const updated = service.updateBusinessProfile(payload);
-      setBusiness(updated);
-      setForm({
-        name: updated.name,
-        registrationNo: updated.registrationNo ?? '',
-        address: updated.address ?? '',
-        phone: updated.phone ?? '',
-        email: updated.email ?? '',
-        baseCurrency: updated.baseCurrency,
-        fiscalYearStart: updated.fiscalYearStart ?? '',
-      });
-      setSuccess('Business profile saved successfully.');
-    } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Unable to save the business profile.');
-    } finally {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setError('Supabase is not configured in this environment.');
       setIsSaving(false);
+      return;
     }
+
+    const payload = {
+      name: form.name.trim(),
+      registration_no: form.registrationNo || null,
+      address: form.address || null,
+      phone: form.phone || null,
+      email: form.email || null,
+      base_currency: form.baseCurrency || 'MYR',
+      fiscal_year_start: form.fiscalYearStart || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error: saveError } = await supabase
+      .from('businesses')
+      .update(payload)
+      .eq('id', businessId)
+      .select()
+      .maybeSingle();
+
+    setIsSaving(false);
+
+    if (saveError) {
+      setError(saveError.message ?? 'Unable to save the business profile.');
+      return;
+    }
+
+    if (!data) {
+      setError('The business profile could not be updated.');
+      return;
+    }
+
+    setForm({
+      name: data.name ?? '',
+      registrationNo: data.registration_no ?? '',
+      address: data.address ?? '',
+      phone: data.phone ?? '',
+      email: data.email ?? '',
+      baseCurrency: data.base_currency ?? 'MYR',
+      fiscalYearStart: data.fiscal_year_start ?? '',
+    });
+    setUpdatedAt(data.updated_at ?? '');
+    setSuccess('Business profile saved successfully.');
   };
 
   return (
@@ -109,10 +145,16 @@ export function BusinessProfileSettings() {
             <p style={{ margin: 0, color: '#475569', letterSpacing: '0.08em', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>Settings</p>
             <h1 style={{ margin: '0.35rem 0 0', fontSize: 'clamp(2rem, 4vw, 2.5rem)' }}>Business Profile</h1>
           </div>
-          <button type="button" onClick={loadProfile} style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: 10, padding: '0.7rem 1rem', cursor: 'pointer' }}>Reload profile</button>
+          <button type="button" onClick={() => void loadProfile()} style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: 10, padding: '0.7rem 1rem', cursor: 'pointer' }}>Reload profile</button>
         </header>
 
-        {isLoading ? (
+        {businessContextError ? (
+          <div role="alert" style={{ background: '#fff1f2', border: '1px solid #fecdd3', color: '#9f1239', borderRadius: 10, padding: '0.75rem' }}>{businessContextError}</div>
+        ) : null}
+
+        {!businessId ? (
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem', color: '#475569' }}>No active business is available for this user.</div>
+        ) : isLoading ? (
           <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem', color: '#475569' }}>Loading business profile…</div>
         ) : (
           <section style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem', display: 'grid', gap: '1rem' }}>
@@ -162,9 +204,9 @@ export function BusinessProfileSettings() {
 
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ color: '#475569', fontSize: 13 }}>
-                Last updated: {new Date(business.updatedAt).toLocaleString()}
+                Last updated: {updatedAt ? new Date(updatedAt).toLocaleString() : 'Not available'}
               </div>
-              <button type="button" onClick={handleSave} disabled={isSaving} style={{ background: '#0f172a', color: '#fff', border: 'none', borderRadius: 10, padding: '0.8rem 1.2rem', fontWeight: 700, cursor: 'pointer', opacity: isSaving ? 0.7 : 1 }}>
+              <button type="button" onClick={() => void handleSave()} disabled={isSaving} style={{ background: '#0f172a', color: '#fff', border: 'none', borderRadius: 10, padding: '0.8rem 1.2rem', fontWeight: 700, cursor: 'pointer', opacity: isSaving ? 0.7 : 1 }}>
                 {isSaving ? 'Saving...' : 'Save'}
               </button>
             </div>

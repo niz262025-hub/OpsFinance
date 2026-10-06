@@ -1,354 +1,292 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
-import { AccountingEngine } from '../packages/accounting';
-import {
-  FinancialReportService,
-  type AccountStatementReport,
-  type BalanceSheetReport,
-  type CashFlowReport,
-  type GeneralLedgerReport,
-  type ProfitAndLossReport,
-  type TrialBalanceReport,
-} from '../packages/reports';
+import { getSupabaseBrowserClient } from '../lib/supabase/client';
+import { AccountingEngine, type BusinessAccount } from '../packages/accounting';
+import { FinancialReportService } from '../packages/reports';
 
-const BUSINESS_ID = '11111111-1111-4111-8111-111111111111';
-const BANK_ACCOUNT_ID = '22222222-2222-4222-8222-222222222222';
-const CASH_ACCOUNT_ID = '55555555-5555-4555-8555-555555555555';
-const SALES_ACCOUNT_ID = '33333333-3333-4333-8333-333333333333';
-const RENTAL_ACCOUNT_ID = '44444444-4444-4444-8444-444444444444';
-const PETROL_ACCOUNT_ID = '66666666-6666-4666-8666-666666666666';
-const BANK_CHARGE_ID = '77777777-7777-4777-8777-777777777777';
-const EQUITY_ID = '88888888-8888-4888-8888-888888888888';
+type ReportsWorkflowProps = { businessId?: string; businessContextError?: string | null };
 
-const accountOptions = [
-  { id: BANK_ACCOUNT_ID, label: 'Maybank' },
-  { id: CASH_ACCOUNT_ID, label: 'Cash' },
-  { id: SALES_ACCOUNT_ID, label: 'Sales' },
-  { id: RENTAL_ACCOUNT_ID, label: 'Rental' },
-  { id: PETROL_ACCOUNT_ID, label: 'Petrol' },
-  { id: BANK_CHARGE_ID, label: 'Bank Charges' },
-  { id: EQUITY_ID, label: 'Capital' },
-];
+const formatMoney = (value: string | number | undefined) => {
+  const numeric = Number(value ?? 0);
+  if (!Number.isFinite(numeric)) {
+    return 'RM0.00';
+  }
+  return `RM${numeric.toFixed(2)}`;
+};
 
-function buildEngine() {
-  const engine = new AccountingEngine({
-    businessId: BUSINESS_ID,
-    accounts: [
-      { id: SALES_ACCOUNT_ID, businessId: BUSINESS_ID, code: '4000', name: 'Sales', accountType: 'REVENUE', normalBalance: 'CREDIT', isSystem: false, isActive: true },
-      { id: RENTAL_ACCOUNT_ID, businessId: BUSINESS_ID, code: '6500', name: 'Rental', accountType: 'EXPENSE', normalBalance: 'DEBIT', isSystem: false, isActive: true },
-      { id: PETROL_ACCOUNT_ID, businessId: BUSINESS_ID, code: '6200', name: 'Petrol', accountType: 'EXPENSE', normalBalance: 'DEBIT', isSystem: false, isActive: true },
-      { id: BANK_CHARGE_ID, businessId: BUSINESS_ID, code: '6900', name: 'Bank Charges', accountType: 'EXPENSE', normalBalance: 'DEBIT', isSystem: false, isActive: true },
-      { id: BANK_ACCOUNT_ID, businessId: BUSINESS_ID, code: '1100', name: 'Maybank', accountType: 'ASSET', normalBalance: 'DEBIT', isSystem: false, isActive: true },
-      { id: CASH_ACCOUNT_ID, businessId: BUSINESS_ID, code: '1110', name: 'Cash', accountType: 'ASSET', normalBalance: 'DEBIT', isSystem: false, isActive: true },
-      { id: EQUITY_ID, businessId: BUSINESS_ID, code: '3000', name: 'Capital', accountType: 'EQUITY', normalBalance: 'CREDIT', isSystem: true, isActive: true },
-    ],
-    periods: [{ id: 'period-1', businessId: BUSINESS_ID, name: '2026-09', startDate: '2026-09-01', endDate: '2026-09-30', status: 'OPEN' }],
-    financialAccounts: [
-      { id: BANK_ACCOUNT_ID, businessId: BUSINESS_ID, name: 'Maybank', type: 'BANK', accountCode: 'MAYBANK', currency: 'MYR', status: 'ACTIVE' },
-      { id: CASH_ACCOUNT_ID, businessId: BUSINESS_ID, name: 'Cash', type: 'CASH', accountCode: 'CASH', currency: 'MYR', status: 'ACTIVE' },
-    ],
-  });
-
-  const opening = engine.createJournal({
-    businessId: BUSINESS_ID,
-    journalNo: 'OB-1',
-    journalDate: '2026-09-01',
-    sourceType: 'SYSTEM',
-    description: 'Opening balance',
-    lines: [
-      { accountId: BANK_ACCOUNT_ID, debit: '10000.00', description: 'Opening bank balance' },
-      { accountId: EQUITY_ID, credit: '10000.00', description: 'Opening equity' },
-    ],
-  });
-  engine.postJournal(opening, { postedBy: 'system', idempotencyKey: 'opening' });
-
-  const sales = engine.createJournal({
-    businessId: BUSINESS_ID,
-    journalNo: 'J-1001',
-    journalDate: '2026-09-12',
-    sourceType: 'MANUAL',
-    description: 'Sales receipt',
-    lines: [
-      { accountId: BANK_ACCOUNT_ID, debit: '5000.00', description: 'Customer payment' },
-      { accountId: SALES_ACCOUNT_ID, credit: '5000.00', description: 'Sales revenue' },
-    ],
-  });
-  engine.postJournal(sales, { postedBy: 'demo-user', idempotencyKey: 'sales' });
-
-  const rent = engine.createJournal({
-    businessId: BUSINESS_ID,
-    journalNo: 'J-1002',
-    journalDate: '2026-09-15',
-    sourceType: 'MANUAL',
-    description: 'Rental expense',
-    lines: [
-      { accountId: RENTAL_ACCOUNT_ID, debit: '1000.00', description: 'Rent payment' },
-      { accountId: BANK_ACCOUNT_ID, credit: '1000.00', description: 'Lease payment' },
-    ],
-  });
-  engine.postJournal(rent, { postedBy: 'demo-user', idempotencyKey: 'rent' });
-
-  const petrol = engine.createJournal({
-    businessId: BUSINESS_ID,
-    journalNo: 'J-1003',
-    journalDate: '2026-09-18',
-    sourceType: 'MANUAL',
-    description: 'Petrol expense',
-    lines: [
-      { accountId: PETROL_ACCOUNT_ID, debit: '300.00', description: 'Fuel' },
-      { accountId: BANK_ACCOUNT_ID, credit: '300.00', description: 'Fuel payment' },
-    ],
-  });
-  engine.postJournal(petrol, { postedBy: 'demo-user', idempotencyKey: 'petrol' });
-
-  const charge = engine.createJournal({
-    businessId: BUSINESS_ID,
-    journalNo: 'J-1004',
-    journalDate: '2026-09-19',
-    sourceType: 'MANUAL',
-    description: 'Bank charge',
-    lines: [
-      { accountId: BANK_CHARGE_ID, debit: '10.00', description: 'Bank fee' },
-      { accountId: BANK_ACCOUNT_ID, credit: '10.00', description: 'Bank service fee' },
-    ],
-  });
-  engine.postJournal(charge, { postedBy: 'demo-user', idempotencyKey: 'charge' });
-
-  const transfer = engine.createJournal({
-    businessId: BUSINESS_ID,
-    journalNo: 'J-1005',
-    journalDate: '2026-09-20',
-    sourceType: 'MANUAL',
-    description: 'Transfer from bank to cash',
-    lines: [
-      { accountId: CASH_ACCOUNT_ID, debit: '1000.00', description: 'Cash transferred in' },
-      { accountId: BANK_ACCOUNT_ID, credit: '1000.00', description: 'Cash transferred out' },
-    ],
-  });
-  engine.postJournal(transfer, { postedBy: 'demo-user', idempotencyKey: 'transfer' });
-
-  return engine;
-}
-
-export function ReportsWorkflow() {
-  const [engine] = useState<AccountingEngine>(() => buildEngine());
-  const [report, setReport] = useState<'ledger' | 'statement' | 'trial' | 'pnl' | 'sheet' | 'cash'>('ledger');
-  const [dateFrom, setDateFrom] = useState('2026-09-01');
-  const [dateTo, setDateTo] = useState('2026-09-30');
-  const [selectedAccountId, setSelectedAccountId] = useState(BANK_ACCOUNT_ID);
-  const [isLoading, setIsLoading] = useState(false);
-  const service = useMemo(() => new FinancialReportService(engine), [engine]);
+export function ReportsWorkflow({ businessId, businessContextError }: ReportsWorkflowProps) {
+  const [report, setReport] = useState<'ledger' | 'statement' | 'trial' | 'pnl' | 'sheet' | 'cash'>('trial');
+  const [dateFrom, setDateFrom] = useState('2026-01-01');
+  const [dateTo, setDateTo] = useState('2026-12-31');
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [accounts, setAccounts] = useState<BusinessAccount[]>([]);
+  const [trial, setTrial] = useState<any>(null);
+  const [pnl, setPnl] = useState<any>(null);
+  const [sheet, setSheet] = useState<any>(null);
+  const [cash, setCash] = useState<any>(null);
+  const [ledger, setLedger] = useState<any>(null);
+  const [statement, setStatement] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setIsLoading(true);
-    const timeout = window.setTimeout(() => setIsLoading(false), 80);
-    return () => window.clearTimeout(timeout);
-  }, [report, dateFrom, dateTo, selectedAccountId]);
+    const load = async () => {
+      if (!businessId) {
+        setAccounts([]);
+        setTrial(null);
+        setPnl(null);
+        setSheet(null);
+        setCash(null);
+        setLedger(null);
+        setStatement(null);
+        return;
+      }
 
-  let ledger: GeneralLedgerReport = {
-    businessId: BUSINESS_ID,
-    rows: [],
-    openingBalance: '0.00',
-    closingBalance: '0.00',
-    totalDebit: '0.00',
-    totalCredit: '0.00',
+      const client = getSupabaseBrowserClient();
+      if (!client) {
+        setError('Supabase is not configured in this environment.');
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const { data: accountRows, error: accountError } = await client.from('accounts').select('*').eq('business_id', businessId).order('code', { ascending: true });
+        if (accountError) throw new Error(accountError.message);
+
+        const { data: journalRows, error: journalError } = await client
+          .from('journal_entries')
+          .select('id, journal_no, journal_date, description, status, journal_lines(*)')
+          .eq('business_id', businessId)
+          .eq('status', 'POSTED');
+        if (journalError) throw new Error(journalError.message);
+
+        const mappedAccounts = (accountRows ?? []).map((row: any) => ({
+          id: row.id,
+          businessId: row.business_id,
+          code: row.code,
+          name: row.name,
+          accountType: row.account_type,
+          normalBalance: row.normal_balance,
+          isSystem: row.is_system,
+          isActive: row.is_active,
+          parentId: row.parent_id,
+        })) as BusinessAccount[];
+
+        const repository = {
+          getBusinessAccounts: () => mappedAccounts,
+          getPostedJournals: () =>
+            (journalRows ?? []).map((row: any) => ({
+              id: row.id,
+              businessId: row.business_id,
+              journalNo: row.journal_no,
+              journalDate: row.journal_date,
+              sourceType: row.source_type ?? 'MANUAL',
+              description: row.description,
+              status: row.status,
+              referenceNo: row.journal_no,
+              lines: (row.journal_lines ?? []).map((line: any) => ({
+                id: line.id,
+                journalEntryId: line.journal_entry_id,
+                accountId: line.account_id,
+                debit: String(line.debit ?? '0.00'),
+                credit: String(line.credit ?? '0.00'),
+                description: line.description,
+                financialAccountId: line.financial_account_id,
+                contactId: line.contact_id,
+              })),
+              createdAt: row.created_at ?? new Date().toISOString(),
+            })),
+        };
+
+        const service = new FinancialReportService({
+          engine: new AccountingEngine({ businessId, accounts: mappedAccounts }),
+          repository,
+        });
+
+        setAccounts(mappedAccounts);
+        setSelectedAccountId((mappedAccounts[0]?.id ?? ''));
+        setTrial(service.getTrialBalance({ businessId, dateFrom, dateTo }));
+        setPnl(service.getProfitAndLoss({ businessId, dateFrom, dateTo }));
+        setSheet(service.getBalanceSheet({ businessId, dateFrom, dateTo }));
+        setCash(service.getCashFlow({ businessId, dateFrom, dateTo }));
+        setLedger(service.getGeneralLedger({ businessId, dateFrom, dateTo }));
+        if (mappedAccounts[0]) {
+          setStatement(service.getAccountStatement({ businessId, accountId: mappedAccounts[0].id, dateFrom, dateTo }));
+        }
+      } catch (caughtError) {
+        setError(caughtError instanceof Error ? caughtError.message : 'Reports could not be loaded.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [businessId, dateFrom, dateTo]);
+
+  useEffect(() => {
+    if (!businessId || !selectedAccountId) return;
+    const client = getSupabaseBrowserClient();
+    if (!client) return;
+
+    const instance = new AccountingEngine({ businessId, accounts });
+    const service = new FinancialReportService({
+      engine: instance,
+      repository: {
+        getBusinessAccounts: () => accounts,
+        getPostedJournals: () => [],
+      },
+    });
+
+    if (accounts.length > 0) {
+      const statementReport = service.getAccountStatement({ businessId, accountId: selectedAccountId, dateFrom, dateTo });
+      setStatement(statementReport);
+    }
+  }, [selectedAccountId, businessId, dateFrom, dateTo, accounts]);
+
+  const rowData = report === 'ledger' ? ledger : report === 'trial' ? trial : report === 'pnl' ? pnl : report === 'sheet' ? sheet : report === 'cash' ? cash : statement;
+
+  const buttonLabels: Record<string, string> = {
+    ledger: 'General Ledger',
+    statement: 'Account Statement',
+    trial: 'Trial Balance',
+    pnl: 'Profit & Loss',
+    sheet: 'Balance Sheet',
+    cash: 'Cash Flow',
   };
-  let statement: AccountStatementReport = {
-    businessId: BUSINESS_ID,
-    accountId: selectedAccountId,
-    accountName: '',
-    openingBalance: '0.00',
-    closingBalance: '0.00',
-    totalDebit: '0.00',
-    totalCredit: '0.00',
-    transactions: [],
-  };
-  let trial: TrialBalanceReport = {
-    businessId: BUSINESS_ID,
-    rows: [],
-    totalDebit: '0.00',
-    totalCredit: '0.00',
-    difference: '0.00',
-    isBalanced: true,
-  };
-  let pnl: ProfitAndLossReport = {
-    businessId: BUSINESS_ID,
-    revenueTotal: '0.00',
-    cogsTotal: '0.00',
-    expensesTotal: '0.00',
-    grossProfit: '0.00',
-    netProfit: '0.00',
-    sections: { revenue: [], cogs: [], expenses: [] },
-  };
-  let sheet: BalanceSheetReport = {
-    businessId: BUSINESS_ID,
-    totalAssets: '0.00',
-    totalLiabilities: '0.00',
-    totalEquity: '0.00',
-    balanceDifference: '0.00',
-    isBalanced: true,
-    assets: [],
-    liabilities: [],
-    equity: [],
-  };
-  let cashFlow: CashFlowReport = {
-    businessId: BUSINESS_ID,
-    openingCash: '0.00',
-    operatingCashFlow: '0.00',
-    investingCashFlow: '0.00',
-    financingCashFlow: '0.00',
-    netCashFlow: '0.00',
-    closingCash: '0.00',
-  };
-  let renderError: string | null = null;
 
-  try {
-    if (dateFrom > dateTo) {
-      throw new Error('The report start date must be before the end date.');
-    }
-
-    ledger = service.getGeneralLedger({ businessId: BUSINESS_ID, dateFrom, dateTo, accountId: selectedAccountId });
-    statement = service.getAccountStatement({ businessId: BUSINESS_ID, accountId: selectedAccountId, dateFrom, dateTo });
-    trial = service.getTrialBalance({ businessId: BUSINESS_ID, dateFrom, dateTo });
-    pnl = service.getProfitAndLoss({ businessId: BUSINESS_ID, dateFrom, dateTo });
-    sheet = service.getBalanceSheet({ businessId: BUSINESS_ID, dateFrom, dateTo });
-    cashFlow = service.getCashFlow({ businessId: BUSINESS_ID, dateFrom, dateTo });
-  } catch (error) {
-    renderError = error instanceof Error ? error.message : 'Report generation failed.';
-  }
-
-  const renderContent = () => {
-    if (renderError) {
-      return <div role="alert" style={{ color: '#b91c1c', background: '#fee2e2', padding: '0.75rem', borderRadius: 10 }}>{renderError}</div>;
-    }
-
-    if (isLoading) {
-      return <div role="status" style={{ color: '#475569' }}>Loading report values…</div>;
-    }
-
-    const showEmptyState = report === 'ledger' ? ledger.rows.length === 0 :
-      report === 'statement' ? statement.transactions.length === 0 :
-      report === 'trial' ? trial.rows.length === 0 :
-      report === 'pnl' ? pnl.revenueTotal === '0.00' && pnl.expensesTotal === '0.00' :
-      report === 'sheet' ? sheet.assets.length === 0 && sheet.liabilities.length === 0 && sheet.equity.length === 0 :
-      cashFlow.openingCash === '0.00' && cashFlow.closingCash === '0.00';
-
-    if (showEmptyState) {
-      return <div style={{ color: '#475569', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '1rem' }}>No report data for the selected range.</div>;
-    }
-
-    if (report === 'statement') {
-      return (
-        <div style={{ display: 'grid', gap: '0.75rem' }}>
-          <div>Opening: {statement.openingBalance}</div>
-          <div>Closing: {statement.closingBalance}</div>
-          <div>Debit: {statement.totalDebit} / Credit: {statement.totalCredit}</div>
-          {statement.transactions.map((row) => (
-            <div key={`${row.journalNo}-${row.description}`} style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
-              {row.date} | {row.journalNo} | {row.description} | {row.debit} | {row.credit} | {row.runningBalance}
-            </div>
-          ))}
-        </div>
-      );
-    }
-    if (report === 'trial') {
-      return (
-        <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <div>Debit: {trial.totalDebit} | Credit: {trial.totalCredit} | Balanced: {String(trial.isBalanced)}</div>
-          {trial.rows.map((row) => (
-            <div key={row.accountId}>{row.accountName}: {row.debit} / {row.credit}</div>
-          ))}
-        </div>
-      );
-    }
-    if (report === 'pnl') {
-      return (
-        <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <div>Revenue: {pnl.revenueTotal}</div>
-          <div>COGS: {pnl.cogsTotal}</div>
-          <div>Expenses: {pnl.expensesTotal}</div>
-          <div>Gross Profit: {pnl.grossProfit}</div>
-          <div>Net Profit: {pnl.netProfit}</div>
-        </div>
-      );
-    }
-    if (report === 'sheet') {
-      return (
-        <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <div>Assets: {sheet.totalAssets}</div>
-          <div>Liabilities: {sheet.totalLiabilities}</div>
-          <div>Equity: {sheet.totalEquity}</div>
-          <div>Balanced: {String(sheet.isBalanced)}</div>
-          <div>Difference: {sheet.balanceDifference}</div>
-        </div>
-      );
-    }
-    if (report === 'cash') {
-      return (
-        <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <div>Opening Cash: {cashFlow.openingCash}</div>
-          <div>Operating: {cashFlow.operatingCashFlow}</div>
-          <div>Investing: {cashFlow.investingCashFlow}</div>
-          <div>Financing: {cashFlow.financingCashFlow}</div>
-          <div>Net: {cashFlow.netCashFlow}</div>
-          <div>Closing: {cashFlow.closingCash}</div>
-        </div>
-      );
-    }
-
+  if (!businessId) {
     return (
-      <div style={{ display: 'grid', gap: '0.5rem' }}>
-        <div>Opening: {ledger.openingBalance}</div>
-        <div>Closing: {ledger.closingBalance}</div>
-        <div>Debit: {ledger.totalDebit} / Credit: {ledger.totalCredit}</div>
-        {ledger.rows.map((row) => (
-          <div key={`${row.journalNo}-${row.accountId}-${row.date}`} style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
-            {row.date} | {row.journalNo} | {row.accountName} | {row.debit} | {row.credit} | {row.balance}
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  return (
-    <main style={{ minHeight: '100vh', padding: '2rem 1rem', background: '#f8fafc', color: '#0f172a', fontFamily: 'Arial, sans-serif' }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-          <div>
-            <p style={{ margin: 0, fontSize: 12, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700 }}>OpsFinance</p>
-            <h1 style={{ margin: '0.2rem 0 0', fontSize: '2rem' }}>Financial Reports</h1>
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {['ledger', 'statement', 'trial', 'pnl', 'sheet', 'cash'].map((key) => (
-              <button key={key} type="button" onClick={() => setReport(key as any)} style={{ border: 'none', background: report === key ? '#0f172a' : '#e2e8f0', color: report === key ? '#fff' : '#0f172a', borderRadius: 10, padding: '0.7rem 0.9rem', fontWeight: 700, cursor: 'pointer' }}>
-                {key === 'ledger' ? 'General Ledger' : key === 'statement' ? 'Account Statement' : key === 'trial' ? 'Trial Balance' : key === 'pnl' ? 'Profit & Loss' : key === 'sheet' ? 'Balance Sheet' : 'Cash Flow'}
+      <main style={{ padding: '2rem', fontFamily: 'Arial, sans-serif', color: '#0f172a', background: '#f8fafc', minHeight: '100vh' }}>
+        <div style={{ maxWidth: 960, margin: '0 auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.5rem', display: 'grid', gap: '1rem' }}>
+          <h1 style={{ margin: 0 }}>Financial Reports</h1>
+          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+            {Object.entries(buttonLabels).map(([key, label]) => (
+              <button key={key} type="button" style={{ border: '1px solid #cbd5e1', borderRadius: 10, background: '#f8fafc', color: '#0f172a', padding: '0.65rem 0.8rem', fontWeight: 700, cursor: 'pointer' }}>
+                {label}
               </button>
             ))}
           </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
+            <label style={{ display: 'grid', gap: '0.25rem' }}>
+              <span>Start date</span>
+              <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+            </label>
+            <label style={{ display: 'grid', gap: '0.25rem' }}>
+              <span>End date</span>
+              <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+            </label>
+            <label style={{ display: 'grid', gap: '0.25rem' }}>
+              <span>Account</span>
+              <select value={selectedAccountId} onChange={(event) => setSelectedAccountId(event.target.value)}>
+                <option value="">None selected</option>
+              </select>
+            </label>
+          </div>
+          <p style={{ margin: 0, color: '#475569' }}>{businessContextError ?? 'No active business for reports.'}</p>
         </div>
+      </main>
+    );
+  }
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
-          <label style={{ display: 'grid', gap: '0.25rem', color: '#334155' }}>
-            Start date
-            <input aria-label="Start date" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-          </label>
-          <label style={{ display: 'grid', gap: '0.25rem', color: '#334155' }}>
-            End date
-            <input aria-label="End date" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-          </label>
-          <label style={{ display: 'grid', gap: '0.25rem', color: '#334155' }}>
-            Account
-            <select aria-label="Account filter" value={selectedAccountId} onChange={(event) => setSelectedAccountId(event.target.value)}>
-              {accountOptions.map((account) => (
-                <option key={account.id} value={account.id}>{account.label}</option>
-              ))}
-            </select>
-          </label>
-        </div>
+  if (error) {
+    return <main style={{ padding: '2rem', fontFamily: 'Arial, sans-serif' }}><div role="alert" style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 18, padding: '1.5rem' }}>{error}</div></main>;
+  }
 
-        {renderContent()}
+  return (
+    <main style={{ minHeight: '100vh', background: '#f8fafc', padding: '1.5rem 1rem 2rem', fontFamily: 'Arial, sans-serif', color: '#0f172a' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gap: '1rem' }}>
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div>
+            <p style={{ margin: 0, color: '#475569', letterSpacing: '0.08em', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>OpsFinance</p>
+            <h1 style={{ margin: '0.35rem 0 0' }}>Financial Reports</h1>
+          </div>
+        </header>
+
+        <section style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1rem' }}>
+          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+            {['ledger', 'statement', 'trial', 'pnl', 'sheet', 'cash'].map((key) => (
+              <button key={key} type="button" onClick={() => setReport(key as any)} style={{ border: 'none', background: report === key ? '#0f172a' : '#e2e8f0', color: report === key ? '#fff' : '#0f172a', borderRadius: 10, padding: '0.7rem 0.9rem', fontWeight: 700, cursor: 'pointer' }}>
+                {buttonLabels[key]}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <label style={{ display: 'grid', gap: '0.25rem' }}>
+              <span>Start date</span>
+              <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+            </label>
+            <label style={{ display: 'grid', gap: '0.25rem' }}>
+              <span>End date</span>
+              <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+            </label>
+            <label style={{ display: 'grid', gap: '0.25rem' }}>
+              <span>Account</span>
+              <select value={selectedAccountId} onChange={(event) => setSelectedAccountId(event.target.value)}>
+                {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+              </select>
+            </label>
+          </div>
+        </section>
+
+        {loading ? <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem' }}>Loading real reporting data…</div> : null}
+
+        {!loading && rowData ? (
+          <section style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1rem' }}>
+            {report === 'trial' ? (
+              <div>
+                <h2>Trial Balance</h2>
+                <p>Total Debit: {formatMoney(trial?.totalDebit ?? '0.00')} / Total Credit: {formatMoney(trial?.totalCredit ?? '0.00')}</p>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Account</th><th style={{ textAlign: 'right', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Debit</th><th style={{ textAlign: 'right', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Credit</th></tr>
+                  </thead>
+                  <tbody>
+                    {(trial?.rows ?? []).map((row: any) => (
+                      <tr key={row.accountId}><td style={{ padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{row.accountName}</td><td style={{ textAlign: 'right', padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{formatMoney(row.debit)}</td><td style={{ textAlign: 'right', padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{formatMoney(row.credit)}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
+            {report === 'pnl' ? (
+              <div>
+                <h2>P&L</h2>
+                <p>Revenue: {formatMoney(pnl?.revenueTotal ?? '0.00')} / Expenses: {formatMoney(pnl?.expensesTotal ?? '0.00')} / Net Profit: {formatMoney(pnl?.netProfit ?? '0.00')}</p>
+              </div>
+            ) : null}
+
+            {report === 'sheet' ? (
+              <div>
+                <h2>Balance Sheet</h2>
+                <p>Total Assets: {formatMoney(sheet?.totalAssets ?? '0.00')} / Total Liabilities: {formatMoney(sheet?.totalLiabilities ?? '0.00')} / Total Equity: {formatMoney(sheet?.totalEquity ?? '0.00')}</p>
+              </div>
+            ) : null}
+
+            {report === 'cash' ? (
+              <div>
+                <h2>Cash Flow</h2>
+                <p>Closing Cash: {formatMoney(cash?.closingCash ?? '0.00')} / Net Cash Flow: {formatMoney(cash?.netCashFlow ?? '0.00')}</p>
+              </div>
+            ) : null}
+
+            {report === 'ledger' ? (
+              <div>
+                <h2>General Ledger</h2>
+                <p>Closing Balance: {formatMoney(ledger?.closingBalance ?? '0.00')}</p>
+              </div>
+            ) : null}
+
+            {report === 'statement' ? (
+              <div>
+                <h2>Account Statement</h2>
+                <p>Closing Balance: {formatMoney(statement?.closingBalance ?? '0.00')}</p>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
       </div>
     </main>
   );

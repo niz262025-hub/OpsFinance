@@ -225,18 +225,18 @@ export class UploadConvertService {
     return undefined;
   }
 
-  private resolveSuggestionAccounts(): { bankAccountId: string; revenueAccountId: string; expenseAccountId: string } {
+  private resolveSuggestionAccounts(): { bankAccountId?: string; revenueAccountId?: string; expenseAccountId?: string } {
     const accounts = (this.engine as any).accounts as Map<string, { id: string; accountType: string; name: string }> | undefined;
     const financialAccounts = (this.engine as any).financialAccounts as Map<string, { id: string; type: string; name: string }> | undefined;
 
-    const bankAccountId = financialAccounts ? [...financialAccounts.values()].find((account) => account.type === 'BANK')?.id : '22222222-2222-4222-8222-222222222222';
-    const revenueAccountId = accounts ? [...accounts.values()].find((account) => account.accountType === 'REVENUE')?.id : '33333333-3333-4333-8333-333333333333';
-    const expenseAccountId = accounts ? [...accounts.values()].find((account) => account.accountType === 'EXPENSE')?.id : '44444444-4444-4444-8444-444444444444';
+    const bankAccountId = financialAccounts ? [...financialAccounts.values()].find((account) => account.type === 'BANK')?.id : undefined;
+    const revenueAccountId = accounts ? [...accounts.values()].find((account) => account.accountType === 'REVENUE')?.id : undefined;
+    const expenseAccountId = accounts ? [...accounts.values()].find((account) => account.accountType === 'EXPENSE')?.id : undefined;
 
     return {
-      bankAccountId: bankAccountId ?? '22222222-2222-4222-8222-222222222222',
-      revenueAccountId: revenueAccountId ?? '33333333-3333-4333-8333-333333333333',
-      expenseAccountId: expenseAccountId ?? '44444444-4444-4444-8444-444444444444',
+      bankAccountId: bankAccountId ?? undefined,
+      revenueAccountId: revenueAccountId ?? undefined,
+      expenseAccountId: expenseAccountId ?? undefined,
     };
   }
 
@@ -645,15 +645,15 @@ export class UploadConvertService {
       status: 'PARSED',
       suggestion: {
         type: 'MONEY_IN',
-        financialAccountId: '22222222-2222-4222-8222-222222222222',
-        accountId: '33333333-3333-4333-8333-333333333333',
+        financialAccountId: this.resolveSuggestionAccounts().bankAccountId,
+        accountId: this.resolveSuggestionAccounts().revenueAccountId,
         amount,
         description: `Customer invoice ${invoiceRef}`,
         referenceNo: invoiceRef,
         date,
       },
       confidence: 88,
-      auditTrail: [`Extracted invoice ${invoiceRef}`],
+      auditTrail: [`Extracted invoice ${invoiceRef}`, this.resolveSuggestionAccounts().bankAccountId && this.resolveSuggestionAccounts().revenueAccountId ? 'PERSISTENCE_READY' : 'PERSISTENCE_NOT_AVAILABLE'],
     };
   }
 
@@ -686,15 +686,15 @@ export class UploadConvertService {
       status: 'PARSED',
       suggestion: {
         type: 'MONEY_OUT',
-        financialAccountId: '22222222-2222-4222-8222-222222222222',
-        accountId: '44444444-4444-4444-8444-444444444444',
+        financialAccountId: this.resolveSuggestionAccounts().bankAccountId,
+        accountId: this.resolveSuggestionAccounts().expenseAccountId,
         amount,
         description: `Business receipt ${receiptRef}`,
         referenceNo: receiptRef,
         date,
       },
       confidence: 86,
-      auditTrail: [`Extracted receipt ${receiptRef}`],
+      auditTrail: [`Extracted receipt ${receiptRef}`, this.resolveSuggestionAccounts().bankAccountId && this.resolveSuggestionAccounts().expenseAccountId ? 'PERSISTENCE_READY' : 'PERSISTENCE_NOT_AVAILABLE'],
     };
   }
 
