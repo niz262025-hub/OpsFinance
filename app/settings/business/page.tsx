@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 
+import { AuthenticatedAppShell } from '../../../components/authenticated-shell';
 import { BusinessProfileSettings } from '../../../components/business-profile-settings';
 import { resolveCurrentBusinessForUser } from '../../../lib/auth/business';
 import { createSupabaseServerClient } from '../../../lib/supabase/server';
@@ -17,5 +18,9 @@ export default async function BusinessProfilePage() {
 
   const { business, error: businessContextError } = await resolveCurrentBusinessForUser(supabase, user.id);
 
-  return <BusinessProfileSettings businessId={business?.id ?? null} businessContextError={businessContextError} />;
+  return (
+    <AuthenticatedAppShell businessName={business?.name ?? 'No active business'} userEmail={user.email ?? user.id}>
+      <BusinessProfileSettings businessId={business?.id ?? null} businessContextError={businessContextError} />
+    </AuthenticatedAppShell>
+  );
 }

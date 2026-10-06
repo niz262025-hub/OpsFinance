@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 
-type TransactionWorkflowProps = { businessId?: string };
+type TransactionWorkflowProps = { businessId?: string; defaultType?: 'MONEY_IN' | 'MONEY_OUT' | 'TRANSFER' | 'JOURNAL' };
 
 const formatMoney = (value: string | number | undefined) => {
   const numeric = Number(value ?? 0);
@@ -12,14 +12,24 @@ const formatMoney = (value: string | number | undefined) => {
   return `RM${numeric.toFixed(2)}`;
 };
 
-export function TransactionWorkflow({ businessId }: TransactionWorkflowProps) {
+type TransactionFormState = {
+  type: 'MONEY_IN' | 'MONEY_OUT' | 'TRANSFER' | 'JOURNAL';
+  date: string;
+  description: string;
+  amount: string;
+  reference_no: string;
+  financial_account_id: string;
+  account_id: string;
+};
+
+export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: TransactionWorkflowProps) {
   const [transactions, setTransactions] = useState<Array<any>>([]);
   const [accounts, setAccounts] = useState<Array<any>>([]);
   const [financialAccounts, setFinancialAccounts] = useState<Array<any>>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    type: 'MONEY_IN',
+  const [form, setForm] = useState<TransactionFormState>({
+    type: defaultType,
     date: '2026-10-05',
     description: 'Real DB posting',
     amount: '100.00',
@@ -118,7 +128,7 @@ export function TransactionWorkflow({ businessId }: TransactionWorkflowProps) {
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => setForm((current) => ({ ...current, type: option.value }))}
+                  onClick={() => setForm((current) => ({ ...current, type: option.value as TransactionFormState['type'] }))}
                   style={{
                     background: isActive ? '#0f172a' : '#f8fafc',
                     color: isActive ? '#fff' : '#0f172a',
@@ -136,7 +146,7 @@ export function TransactionWorkflow({ businessId }: TransactionWorkflowProps) {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
-            <label style={{ display: 'grid', gap: '0.25rem' }}>Type<select value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}><option value="MONEY_IN">Money In</option><option value="MONEY_OUT">Money Out</option><option value="TRANSFER">Transfer</option><option value="JOURNAL">Journal</option></select></label>
+            <label style={{ display: 'grid', gap: '0.25rem' }}>Type<select value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as TransactionFormState['type'] }))}><option value="MONEY_IN">Money In</option><option value="MONEY_OUT">Money Out</option><option value="TRANSFER">Transfer</option><option value="JOURNAL">Journal</option></select></label>
             <label style={{ display: 'grid', gap: '0.25rem' }}>Date<input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} /></label>
             <label style={{ display: 'grid', gap: '0.25rem' }}>Amount<input value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} /></label>
           </div>

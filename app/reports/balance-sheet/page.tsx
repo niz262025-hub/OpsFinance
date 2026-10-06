@@ -1,16 +1,13 @@
 import { redirect } from 'next/navigation';
 
 import { AuthenticatedAppShell } from '../../../components/authenticated-shell';
-import { AccountingRulesSettings } from '../../../components/accounting-rules-settings';
+import { ReportsWorkflow } from '../../../components/reports-workflow';
 import { resolveCurrentBusinessForUser } from '../../../lib/auth/business';
 import { createSupabaseServerClient } from '../../../lib/supabase/server';
 
-export default async function AccountingRulesRoute() {
+export default async function ReportsBalanceSheetPage() {
   const supabase = createSupabaseServerClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  const { data: { user }, error } = await supabase.auth.getUser();
 
   if (error || !user) {
     redirect('/login');
@@ -20,7 +17,7 @@ export default async function AccountingRulesRoute() {
 
   return (
     <AuthenticatedAppShell businessName={business?.name ?? 'No active business'} userEmail={user.email ?? user.id}>
-      <AccountingRulesSettings businessId={business?.id ?? null} businessContextError={businessContextError ?? null} />
+      <ReportsWorkflow businessId={business?.id ?? undefined} businessContextError={businessContextError ?? null} defaultReport="sheet" />
     </AuthenticatedAppShell>
   );
 }

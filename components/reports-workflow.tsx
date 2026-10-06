@@ -6,7 +6,7 @@ import { getSupabaseBrowserClient } from '../lib/supabase/client';
 import { AccountingEngine, type BusinessAccount } from '../packages/accounting';
 import { FinancialReportService } from '../packages/reports';
 
-type ReportsWorkflowProps = { businessId?: string; businessContextError?: string | null };
+type ReportsWorkflowProps = { businessId?: string; businessContextError?: string | null; defaultReport?: 'ledger' | 'statement' | 'trial' | 'pnl' | 'sheet' | 'cash' };
 
 const formatMoney = (value: string | number | undefined) => {
   const numeric = Number(value ?? 0);
@@ -16,8 +16,8 @@ const formatMoney = (value: string | number | undefined) => {
   return `RM${numeric.toFixed(2)}`;
 };
 
-export function ReportsWorkflow({ businessId, businessContextError }: ReportsWorkflowProps) {
-  const [report, setReport] = useState<'ledger' | 'statement' | 'trial' | 'pnl' | 'sheet' | 'cash'>('trial');
+export function ReportsWorkflow({ businessId, businessContextError, defaultReport = 'trial' }: ReportsWorkflowProps) {
+  const [report, setReport] = useState<'ledger' | 'statement' | 'trial' | 'pnl' | 'sheet' | 'cash'>(defaultReport);
   const [dateFrom, setDateFrom] = useState('2026-01-01');
   const [dateTo, setDateTo] = useState('2026-12-31');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');

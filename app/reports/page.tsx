@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 
+import { AuthenticatedAppShell } from '../../components/authenticated-shell';
 import { ReportsWorkflow } from '../../components/reports-workflow';
 import { resolveCurrentBusinessForUser } from '../../lib/auth/business';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
@@ -17,5 +18,9 @@ export default async function ReportsPage() {
 
   const { business, error: businessContextError } = await resolveCurrentBusinessForUser(supabase, user.id);
 
-  return <ReportsWorkflow businessId={business?.id ?? undefined} businessContextError={businessContextError ?? null} />;
+  return (
+    <AuthenticatedAppShell businessName={business?.name ?? 'No active business'} userEmail={user.email ?? user.id}>
+      <ReportsWorkflow businessId={business?.id ?? undefined} businessContextError={businessContextError ?? null} />
+    </AuthenticatedAppShell>
+  );
 }

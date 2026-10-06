@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 
+import { AuthenticatedAppShell } from '../../../components/authenticated-shell';
 import { AccountingSettingsPage } from '../../../components/accounting-settings';
 import { resolveCurrentBusinessForUser } from '../../../lib/auth/business';
 import { createSupabaseServerClient } from '../../../lib/supabase/server';
@@ -17,5 +18,9 @@ export default async function AccountingSettingsRoute() {
 
   const { business, error: businessContextError } = await resolveCurrentBusinessForUser(supabase, user.id);
 
-  return <AccountingSettingsPage businessId={business?.id ?? null} businessContextError={businessContextError ?? null} />;
+  return (
+    <AuthenticatedAppShell businessName={business?.name ?? 'No active business'} userEmail={user.email ?? user.id}>
+      <AccountingSettingsPage businessId={business?.id ?? null} businessContextError={businessContextError ?? null} />
+    </AuthenticatedAppShell>
+  );
 }

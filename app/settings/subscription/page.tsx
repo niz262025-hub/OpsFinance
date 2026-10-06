@@ -1,5 +1,10 @@
+import { AuthenticatedAppShell } from '../../../components/authenticated-shell';
 import { SubscriptionSettings } from '../../../components/subscription-settings';
 
 export default function SubscriptionSettingsPage() {
-  return <SubscriptionSettings />;
+  return (
+    <AuthenticatedAppShell>
+      <SubscriptionSettings />
+    </AuthenticatedAppShell>
+  );
 }

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 
+import { AuthenticatedAppShell } from '../../components/authenticated-shell';
 import { TransactionWorkflow } from '../../components/transaction-workflow';
 import { resolveCurrentBusinessForUser } from '../../lib/auth/business';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
@@ -17,5 +18,9 @@ export default async function TransactionsPage() {
 
   const { business, context } = await resolveCurrentBusinessForUser(supabase, user.id);
 
-  return <TransactionWorkflow businessId={business?.id ?? context?.businessId ?? undefined} />;
+  return (
+    <AuthenticatedAppShell businessName={business?.name ?? 'No active business'} userEmail={user.email ?? user.id}>
+      <TransactionWorkflow businessId={business?.id ?? context?.businessId ?? undefined} />
+    </AuthenticatedAppShell>
+  );
 }

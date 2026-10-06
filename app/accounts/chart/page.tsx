@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 
+import { AuthenticatedAppShell } from '../../../components/authenticated-shell';
 import { ChartOfAccountsWorkflow } from '../../../components/chart-of-accounts-workflow';
 import { createSupabaseServerClient } from '../../../lib/supabase/server';
 
@@ -21,5 +22,9 @@ export default async function ChartOfAccountsPage() {
 
   const businessId = memberships?.[0]?.business_id ?? undefined;
 
-  return <ChartOfAccountsWorkflow businessId={businessId} />;
+  return (
+    <AuthenticatedAppShell businessName={memberships?.[0]?.business_id ? 'Business context loaded' : 'No active business'} userEmail={user.email ?? user.id}>
+      <ChartOfAccountsWorkflow businessId={businessId} />
+    </AuthenticatedAppShell>
+  );
 }
