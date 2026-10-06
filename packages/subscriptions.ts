@@ -238,6 +238,12 @@ export class SubscriptionService {
     }
   }
 
+  private assertCancelableState(subscription: SubscriptionRecord): void {
+    if (subscription.status === 'CANCELLED') {
+      throw new Error('Subscription is already cancelled.');
+    }
+  }
+
   private ensureStarterBusinessLimit(businessId: string, userId: string): void {
     const existingSubscription = this.businessSubscriptionById.get(businessId);
     if (existingSubscription) {
@@ -351,6 +357,9 @@ export class SubscriptionService {
   transitionStatus(subscriptionId: string, nextStatus: SubscriptionLifecycleStatus, actor: string): SubscriptionRecord {
     const subscription = this.getSubscription(subscriptionId);
     this.assertBusinessOwnerForSubscription(subscription, actor);
+    if (subscription.status === 'CANCELLED') {
+      throw new Error('Cancelled subscriptions cannot transition to a new status.');
+    }
     if (nextStatus === 'ACTIVE' && subscription.status === 'SUSPENDED') {
       throw new Error('Suspended subscriptions require payment-backed reactivation.');
     }
@@ -386,6 +395,9 @@ export class SubscriptionService {
   reactivateSubscription(subscriptionId: string, actor: string): SubscriptionRecord {
     const subscription = this.getSubscription(subscriptionId);
     this.assertBusinessOwnerForSubscription(subscription, actor);
+    if (subscription.status === 'CANCELLED') {
+      throw new Error('Cancelled subscriptions cannot be reactivated.');
+    }
 
     const allowedStatuses: SubscriptionLifecycleStatus[] = ['PAST_DUE', 'GRACE_PERIOD', 'SUSPENDED'];
     if (!allowedStatuses.includes(subscription.status)) {
@@ -412,6 +424,9 @@ export class SubscriptionService {
   initiatePayment(subscriptionId: string, invoiceReference: string, amount: string, currency: string, actor: string, providerEventId?: string): PaymentRecord {
     const subscription = this.getSubscription(subscriptionId);
     this.assertBusinessOwnerForSubscription(subscription, actor);
+    if (subscription.status === 'CANCELLED') {
+      throw new Error('Cancelled subscriptions cannot accept new payment activity.');
+    }
     if (amount !== subscription.monthlyPrice || currency.toUpperCase() !== subscription.currency) {
       throw new Error('Payment amount or currency does not match the subscription.');
     }
@@ -524,6 +539,9 @@ export class SubscriptionService {
   renewSubscription(subscriptionId: string, actor: string): SubscriptionRecord {
     const subscription = this.getSubscription(subscriptionId);
     this.assertBusinessOwnerForSubscription(subscription, actor);
+    if (subscription.status === 'CANCELLED') {
+      throw new Error('Cancelled subscriptions cannot be renewed.');
+    }
 
     const payment = this.paymentsBySubscription.get(subscriptionId)?.find((entry) => entry.status === 'PAID') ?? null;
     if (!payment) {
@@ -573,6 +591,7 @@ export class SubscriptionService {
   cancelSubscription(subscriptionId: string, actor: string, effectiveAt: 'IMMEDIATE' | 'PERIOD_END' = 'PERIOD_END'): SubscriptionRecord {
     const subscription = this.getSubscription(subscriptionId);
     this.assertBusinessOwnerForSubscription(subscription, actor);
+    this.assertCancelableState(subscription);
 
     if (effectiveAt === 'PERIOD_END') {
       this.assertStatusTransition(subscription.status, 'CANCELLED');
