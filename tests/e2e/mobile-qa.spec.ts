@@ -29,7 +29,8 @@ test.describe(E2E_ENVIRONMENT, () => {
     await expect(page.getByText('Authentication foundation')).not.toBeVisible();
 
     await page.goto('/transactions');
-    await expect(page.getByText('All Transactions')).toBeVisible();
+    await page.locator('.opsfinance-mobile-toggle').click();
+    await expect(page.getByRole('navigation', { name: 'OpsFinance navigation' }).getByRole('link', { name: 'All Transactions' })).toBeVisible();
     await page.goto('/upload');
     await expect(page.getByRole('heading', { name: 'Upload & Convert' })).toBeVisible();
     await page.goto('/settings/subscription');

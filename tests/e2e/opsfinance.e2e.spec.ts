@@ -41,7 +41,7 @@ test.describe(E2E_ENVIRONMENT, () => {
     await expect(page.getByRole('heading', { name: /OpsFinance current plan/i })).toBeVisible();
 
     await page.goto('/dashboard');
-    await page.getByRole('button', { name: 'Sign out' }).click();
+    await page.getByRole('banner').getByRole('button', { name: 'Sign out', exact: true }).click();
     await page.waitForURL(/\/login(?:\?|$)/, { timeout: 15_000 });
     await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible();
   });
@@ -50,7 +50,7 @@ test.describe(E2E_ENVIRONMENT, () => {
     await authenticateWithUat(page);
 
     await page.goto('/transactions');
-    await expect(page.getByText('All Transactions')).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'OpsFinance navigation' }).getByRole('link', { name: 'All Transactions' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Money In', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Money Out', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Transfer', exact: true })).toBeVisible();
@@ -63,6 +63,6 @@ test.describe(E2E_ENVIRONMENT, () => {
     await expect(page.getByRole('heading', { name: 'Bank Reconciliation' })).toBeVisible();
 
     await page.goto('/reports');
-    await expect(page.getByText('General Ledger')).toBeVisible();
+    await expect(page.getByRole('main').getByText('General Ledger')).toBeVisible();
   });
 });
