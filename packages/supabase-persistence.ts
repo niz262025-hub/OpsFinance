@@ -30,10 +30,40 @@ export function sanitizeBusinessId(businessId: string | undefined | null): strin
   return value;
 }
 
+async function runSupabaseMutation<T>(operation: () => Promise<any> | any): Promise<{ data: T | null; error: { message?: string } | null }> {
+  const builder = operation();
+
+  if (builder && typeof builder === 'object' && 'select' in builder) {
+    const selected = await builder.select();
+    if (selected && typeof selected === 'object' && 'error' in selected) {
+      return { data: (selected as any).data ?? null, error: (selected as any).error ?? null };
+    }
+    if (selected && typeof selected === 'object' && 'single' in selected) {
+      const single = await selected.single();
+      return { data: (single as any).data ?? null, error: (single as any).error ?? null };
+    }
+    if (selected && typeof selected === 'object' && 'data' in selected) {
+      return { data: (selected as any).data ?? null, error: null };
+    }
+  }
+
+  const result = await builder;
+  if (result && typeof result === 'object' && 'data' in result && 'error' in result) {
+    return { data: (result as any).data ?? null, error: (result as any).error ?? null };
+  }
+
+  if (result && typeof result === 'object' && 'single' in result) {
+    const single = await result.single();
+    return { data: (single as any).data ?? null, error: (single as any).error ?? null };
+  }
+
+  return { data: null, error: null };
+}
+
 export class SupabaseRepositoryAdapter<T extends BusinessScopedRecord> {
   constructor(
     private readonly tableName: string,
-    private readonly client: SupabaseClientLike,
+    protected readonly client: SupabaseClientLike,
     private readonly businessKey = 'business_id',
   ) {}
 
@@ -130,8 +160,8 @@ export class SupabaseBusinessRepository {
   }
 
   async create(userId: string, input: Partial<Business> & Pick<Business, 'name' | 'baseCurrency'>): Promise<Business> {
-    const { data, error } = await (this.client.from('businesses') as any)
-      .insert({
+    const { data, error } = await runSupabaseMutation<Business>(() =>
+      (this.client.from('businesses') as any).insert({
         id: input.id,
         name: input.name,
         registration_no: input.registrationNo ?? null,
@@ -140,27 +170,184 @@ export class SupabaseBusinessRepository {
         email: input.email ?? null,
         base_currency: input.baseCurrency ?? 'MYR',
         fiscal_year_start: input.fiscalYearStart ?? null,
-      })
-      .select()
-      .single();
+      }),
+    );
 
     if (error) {
       throw new Error(error.message ?? 'Supabase business creation failed.');
     }
 
-    const membershipResult = await (this.client.from('business_members') as any)
-      .insert({
-        business_id: data.id,
-        user_id: userId,
-        role: 'OWNER',
-      })
-      .select();
+    const persistedBusiness = Array.isArray(data) ? data[0] ?? null : data;
+    if (!persistedBusiness) {
+      throw new Error('Supabase business creation returned no row.');
+    }
+
+    const membershipResult = await runSupabaseMutation<any>(() =>
+      (this.client.from('business_members') as any).upsert(
+        {
+          business_id: persistedBusiness.id,
+          user_id: userId,
+          role: 'OWNER',
+        },
+        { onConflict: 'business_id,user_id' },
+      ),
+    );
 
     if (membershipResult.error) {
       throw new Error(membershipResult.error.message ?? 'Supabase business membership creation failed.');
     }
 
-    return data as Business;
+    const subscriptionRepo = new SupabaseSubscriptionRepository(this.client);
+    await subscriptionRepo.ensureTrialSubscription({
+      businessId: persistedBusiness.id,
+      planCode: 'STARTER',
+      status: 'TRIAL',
+      monthlyPrice: '29.00',
+      currency: 'MYR',
+    });
+
+    return persistedBusiness as Business;
+  }
+}
+
+export class SupabaseSubscriptionRepository extends SupabaseRepositoryAdapter<any> {
+  constructor(client: SupabaseClientLike) {
+    super('subscriptions', client, 'business_id');
+  }
+
+  async getByBusiness(businessId: string): Promise<any> {
+    const scope = sanitizeBusinessId(businessId);
+    const result = await (this.client.from('subscriptions') as any)
+      .select('*')
+      .eq('business_id', scope)
+      .maybeSingle();
+
+    if (result.error) {
+      throw new Error(result.error.message ?? 'Supabase subscription lookup failed.');
+    }
+
+    return result.data ?? null;
+  }
+
+  async create(input: {
+    id?: string;
+    businessId: string;
+    planCode?: string;
+    status?: 'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'SUSPENDED' | 'CANCELLED';
+    currentPeriodStart?: string | null;
+    currentPeriodEnd?: string | null;
+    trialStartedAt?: string | null;
+    trialEndsAt?: string | null;
+    monthlyPrice?: string | null;
+    currency?: string | null;
+  }): Promise<any> {
+    const now = new Date().toISOString();
+    const payload = {
+      id: input.id ?? crypto.randomUUID(),
+      business_id: sanitizeBusinessId(input.businessId),
+      plan_code: input.planCode ?? 'STARTER',
+      status: input.status ?? 'TRIAL',
+      current_period_start: input.currentPeriodStart ?? now,
+      current_period_end: input.currentPeriodEnd ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      trial_started_at: input.trialStartedAt ?? now,
+      trial_ends_at: input.trialEndsAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      created_at: now,
+      updated_at: now,
+    };
+
+    const result = await runSupabaseMutation<any>(() => (this.client.from('subscriptions') as any).insert(payload));
+
+    if (result.error) {
+      throw new Error(result.error.message ?? 'Supabase subscription insert failed.');
+    }
+
+    return Array.isArray(result.data) ? result.data[0] ?? null : result.data;
+  }
+
+  async ensureTrialSubscription(input: {
+    businessId: string;
+    planCode?: string;
+    status?: 'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'SUSPENDED' | 'CANCELLED';
+    monthlyPrice?: string | null;
+    currency?: string | null;
+    currentPeriodStart?: string | null;
+    currentPeriodEnd?: string | null;
+    trialStartedAt?: string | null;
+    trialEndsAt?: string | null;
+  }): Promise<any> {
+    const businessId = sanitizeBusinessId(input.businessId);
+    const now = new Date().toISOString();
+    const preferredStatus = input.status ?? 'TRIAL';
+
+    const persistWithStatus = async (status: 'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'SUSPENDED' | 'CANCELLED') => {
+      const payload = {
+        business_id: businessId,
+        plan_code: input.planCode ?? 'STARTER',
+        status,
+        current_period_start: input.currentPeriodStart ?? now,
+        current_period_end: input.currentPeriodEnd ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        trial_started_at: input.trialStartedAt ?? now,
+        trial_ends_at: input.trialEndsAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        created_at: now,
+        updated_at: now,
+      };
+
+      const existingResult = await (this.client.from('subscriptions') as any)
+        .select('*')
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (existingResult.error) {
+        throw new Error(existingResult.error.message ?? 'Supabase existing subscription lookup failed.');
+      }
+
+      if (existingResult.data) {
+        const result = await runSupabaseMutation<any>(() =>
+          (this.client.from('subscriptions') as any)
+            .update({ ...payload, updated_at: now })
+            .eq('business_id', businessId)
+            .select(),
+        );
+
+        if (result.error) {
+          throw new Error(result.error.message ?? 'Supabase trial subscription update failed.');
+        }
+        return Array.isArray(result.data) ? result.data[0] ?? null : result.data;
+      }
+
+      const result = await runSupabaseMutation<any>(() => (this.client.from('subscriptions') as any).insert(payload).select());
+      if (result.error) {
+        throw new Error(result.error.message ?? 'Supabase trial subscription insert failed.');
+      }
+
+      return Array.isArray(result.data) ? result.data[0] ?? null : result.data;
+    };
+
+    try {
+      return await persistWithStatus(preferredStatus);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? '');
+      const isEnumMismatch = /invalid input value for enum subscription_status_enum|subscription_status_enum/i.test(message);
+      if (preferredStatus === 'TRIAL' && isEnumMismatch) {
+        return persistWithStatus('ACTIVE');
+      }
+      throw error;
+    }
+  }
+
+  async updateByBusiness(businessId: string, patch: Record<string, any>): Promise<any> {
+    const scope = sanitizeBusinessId(businessId);
+    const result = await runSupabaseMutation<any>(() =>
+      (this.client.from('subscriptions') as any)
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq('business_id', scope),
+    );
+
+    if (result.error) {
+      throw new Error(result.error.message ?? 'Supabase subscription update failed.');
+    }
+
+    return Array.isArray(result.data) ? result.data[0] ?? null : result.data;
   }
 }
 
