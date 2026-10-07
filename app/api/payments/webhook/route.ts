@@ -1,23 +1,43 @@
 import { NextResponse } from 'next/server';
 
 import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
-import { CurlecPaymentProvider, resolveNextSubscriptionStatus } from '@/packages/payments';
+import { ToyyibPayProvider, resolveNextSubscriptionStatus } from '@/packages/payments';
+
+function parseCallbackPayload(rawBody: string): Record<string, string> {
+  if (!rawBody) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(rawBody) as Record<string, unknown>;
+    if (parsed && typeof parsed === 'object') {
+      return Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, String(value ?? '')]));
+    }
+  } catch {
+    // Fall back to URL-encoded form parsing for ToyyibPay callback payloads.
+  }
+
+  const params = new URLSearchParams(rawBody);
+  return Object.fromEntries(Array.from(params.entries()).map(([key, value]) => [key, value]));
+}
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
-  const signature = request.headers.get('x-curlec-signature') ?? request.headers.get('x-signature');
-  const payload = rawBody ? JSON.parse(rawBody) : {};
+  const parsedPayload = parseCallbackPayload(rawBody);
+  const signature = request.headers.get('x-signature') ?? request.headers.get('x-toyyibpay-signature') ?? parsedPayload.hash ?? null;
 
-  const provider = new CurlecPaymentProvider({
-    mode: process.env.CURLEC_MODE === 'live' ? 'live' : 'sandbox',
-    secret: process.env.CURLEC_WEBHOOK_SECRET ?? 'sandbox-curlec-secret',
+  const provider = new ToyyibPayProvider({
+    mode: process.env.TOYYIBPAY_MODE === 'live' ? 'live' : 'sandbox',
+    secret: process.env.TOYYIBPAY_SECRET_KEY ?? 'sandbox-toyyibpay-secret',
+    categoryCode: process.env.TOYYIBPAY_CATEGORY_CODE ?? 'sandbox-category',
+    baseUrl: process.env.TOYYIBPAY_BASE_URL ?? 'https://toyyibpay.com',
   });
 
   if (!provider.verifyWebhookSignature(rawBody, signature)) {
     return NextResponse.json({ error: 'Invalid webhook signature.' }, { status: 400 });
   }
 
-  const event = provider.parseWebhookEvent(payload);
+  const event = provider.parseWebhookEvent(parsedPayload);
   const admin = createSupabaseAdminClient();
   const supabase = createSupabaseServerClient();
 
@@ -64,7 +84,7 @@ export async function POST(request: Request) {
       .insert({
         business_id: event.businessId || null,
         subscription_id: event.subscriptionId || null,
-        provider: 'CURLEC',
+        provider: 'TOYYIBPAY',
         provider_payment_id: event.eventId,
         provider_reference: event.reference,
         webhook_event_id: event.eventId,
@@ -74,7 +94,7 @@ export async function POST(request: Request) {
         failure_reason: event.failureReason ?? null,
         metadata: {
           provider: event.provider,
-          raw_event: payload,
+          raw_event: parsedPayload,
         },
       })
       .select('*')

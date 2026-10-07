@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { CurlecPaymentProvider } from '@/packages/payments';
+import { ToyyibPayProvider } from '@/packages/payments';
 
 export async function POST(request: Request) {
   const supabase = createSupabaseServerClient();
@@ -51,9 +51,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Subscription not found.' }, { status: 404 });
   }
 
-  const provider = new CurlecPaymentProvider({
-    mode: process.env.CURLEC_MODE === 'live' ? 'live' : 'sandbox',
-    secret: process.env.CURLEC_WEBHOOK_SECRET ?? 'sandbox-curlec-secret',
+  const provider = new ToyyibPayProvider({
+    mode: process.env.TOYYIBPAY_MODE === 'live' ? 'live' : 'sandbox',
+    secret: process.env.TOYYIBPAY_SECRET_KEY ?? 'sandbox-toyyibpay-secret',
+    categoryCode: process.env.TOYYIBPAY_CATEGORY_CODE ?? 'sandbox-category',
+    baseUrl: process.env.TOYYIBPAY_BASE_URL ?? 'https://toyyibpay.com',
   });
 
   const checkout = provider.createCheckoutSession({
@@ -67,13 +69,14 @@ export async function POST(request: Request) {
     metadata: {
       business_id: businessId,
       subscription_id: subscriptionRow.id,
+      callback_url: process.env.TOYYIBPAY_CALLBACK_URL ?? `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.myops.com.my'}/api/payments/webhook`,
     },
   });
 
   const { error: insertError } = await supabase.from('subscription_payments').insert({
     business_id: businessId,
     subscription_id: subscriptionRow.id,
-    provider: 'CURLEC',
+    provider: 'TOYYIBPAY',
     provider_payment_id: checkout.checkoutId,
     provider_reference: checkout.providerReference,
     checkout_session_id: checkout.checkoutId,

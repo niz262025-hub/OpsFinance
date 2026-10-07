@@ -1,6 +1,6 @@
-import { createHmac } from 'node:crypto';
+import { createHash } from 'node:crypto';
 
-export type PaymentProviderName = 'CURLEC';
+export type PaymentProviderName = 'TOYYIBPAY' | 'CURLEC';
 export type PaymentProviderMode = 'sandbox' | 'live';
 export type PaymentStatus = 'INITIATED' | 'PENDING' | 'AUTHORIZED' | 'PAID' | 'FAILED' | 'CANCELLED' | 'REFUNDED';
 
@@ -32,6 +32,8 @@ export interface PaymentWebhookEvent {
 export interface PaymentProviderOptions {
   mode?: PaymentProviderMode;
   secret?: string;
+  categoryCode?: string;
+  baseUrl?: string;
 }
 
 export abstract class PaymentProvider {
@@ -54,15 +56,19 @@ export abstract class PaymentProvider {
   public abstract parseWebhookEvent(payload: unknown): PaymentWebhookEvent;
 }
 
-export class CurlecPaymentProvider extends PaymentProvider {
-  public readonly providerName: PaymentProviderName = 'CURLEC';
+export class ToyyibPayProvider extends PaymentProvider {
+  public readonly providerName: PaymentProviderName = 'TOYYIBPAY';
   public readonly mode: PaymentProviderMode;
   private readonly secret: string;
+  private readonly categoryCode: string;
+  private readonly baseUrl: string;
 
   constructor(options: PaymentProviderOptions = {}) {
     super();
     this.mode = options.mode ?? 'sandbox';
-    this.secret = options.secret ?? (this.mode === 'live' ? '' : 'sandbox-curlec-secret');
+    this.secret = options.secret ?? process.env.TOYYIBPAY_SECRET_KEY ?? (this.mode === 'live' ? '' : 'sandbox-toyyibpay-secret');
+    this.categoryCode = options.categoryCode ?? process.env.TOYYIBPAY_CATEGORY_CODE ?? 'sandbox-category';
+    this.baseUrl = options.baseUrl ?? process.env.TOYYIBPAY_BASE_URL ?? 'https://toyyibpay.com';
   }
 
   createCheckoutSession(input: {
@@ -76,28 +82,28 @@ export class CurlecPaymentProvider extends PaymentProvider {
     metadata?: Record<string, string>;
   }): PaymentProviderResponse {
     if (this.mode === 'live' && !this.secret) {
-      throw new Error('Curlec live credentials are not configured. Payment onboarding required.');
+      throw new Error('ToyyibPay live credentials are not configured. Payment onboarding required.');
     }
 
-    const amount = input.amount || '29.00';
-    const currency = input.currency || 'MYR';
-    const reference = input.reference || `curlec-${Date.now()}`;
-    const checkoutId = `curlec_${Date.now()}_${Math.random().toString(16).slice(2, 9)}`;
+    const normalizedAmount = String(input.amount || '29.00');
+    const normalizedCurrency = (input.currency || 'MYR').toUpperCase();
+    const reference = input.reference || `OPSFINANCE-${input.businessId}-${input.subscriptionId}-${Date.now()}`;
+    const checkoutId = `toyyibpay_${Date.now()}_${Math.random().toString(16).slice(2, 9)}`;
+    const billCode = reference.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || checkoutId;
     const metadata = {
       business_id: input.businessId,
       subscription_id: input.subscriptionId,
+      bill_code: billCode,
       ...(input.metadata ?? {}),
     };
 
     return {
-      provider: 'CURLEC',
+      provider: 'TOYYIBPAY',
       checkoutId,
-      sessionUrl: this.mode === 'live'
-        ? `https://checkout.curlec.com/session/${checkoutId}`
-        : `https://sandbox.curlec.com/session/${checkoutId}`,
+      sessionUrl: `${this.baseUrl}/${billCode}`,
       providerReference: reference,
-      amount,
-      currency,
+      amount: normalizedAmount,
+      currency: normalizedCurrency,
       mode: this.mode,
       status: 'INITIATED',
       metadata,
@@ -106,48 +112,69 @@ export class CurlecPaymentProvider extends PaymentProvider {
 
   verifyWebhookSignature(rawBody: string, signatureHeader?: string | null): boolean {
     const signature = (signatureHeader ?? '').trim();
-
-    if (this.mode === 'sandbox' && !signature) {
-      return true;
-    }
-
     if (!this.secret) {
       return false;
     }
 
-    const expected = createHmac('sha256', this.secret).update(rawBody, 'utf8').digest('hex');
-    const normalized = signature.toLowerCase();
-    const expectedNormalized = expected.toLowerCase();
+    const parsed = this.parsePayload(rawBody);
+    const payloadHash = signature || String(parsed.hash ?? '').trim();
+    if (!payloadHash) {
+      return false;
+    }
 
-    return normalized === expectedNormalized || normalized === `sha256=${expectedNormalized}`;
+    const status = String(parsed.status ?? '0');
+    const orderId = String(parsed.order_id ?? parsed.orderId ?? '');
+    const refNo = String(parsed.refno ?? parsed.refNo ?? parsed.reference ?? '');
+    const expected = createHash('md5').update(`${this.secret}${status}${orderId}${refNo}ok`).digest('hex');
+    return payloadHash.toLowerCase() === expected.toLowerCase() || payloadHash.toLowerCase() === `md5(${expected})`;
   }
 
   parseWebhookEvent(payload: unknown): PaymentWebhookEvent {
     const event = (payload ?? {}) as Record<string, any>;
-    const eventId = String(event.event_id ?? event.id ?? event.provider_event_id ?? `curlec-${Date.now()}`);
-    const statusValue = String(event.status ?? event.payment_status ?? 'PAID').toUpperCase();
+    const statusValue = Number(event.status ?? event.payment_status ?? 0);
     const normalizedStatus: PaymentStatus =
-      statusValue === 'SUCCESS' || statusValue === 'PAID' ? 'PAID'
-      : statusValue === 'PENDING' ? 'PENDING'
-      : statusValue === 'AUTHORIZED' ? 'AUTHORIZED'
-      : statusValue === 'FAILED' || statusValue === 'DECLINED' ? 'FAILED'
-      : statusValue === 'CANCELLED' ? 'CANCELLED'
-      : statusValue === 'REFUNDED' ? 'REFUNDED'
+      statusValue === 1 ? 'PAID'
+      : statusValue === 2 ? 'PENDING'
+      : statusValue === 3 ? 'FAILED'
       : 'INITIATED';
+    const reference = String(event.order_id ?? event.reference ?? event.refno ?? event.bill_external_reference_no ?? event.id ?? 'toyyibpay');
+    const eventId = String(event.refno ?? event.billcode ?? event.transaction_id ?? event.id ?? `toyyibpay-${Date.now()}`);
 
     return {
-      provider: 'CURLEC',
+      provider: 'TOYYIBPAY',
       eventId,
       status: normalizedStatus,
-      amount: String(event.amount ?? event.amount_rm ?? event.total_amount ?? '29.00'),
+      amount: String(event.amount ?? event.billpaymentamount ?? event.billpaymentAmount ?? '29.00'),
       currency: String(event.currency ?? 'MYR'),
-      reference: String(event.reference ?? event.provider_reference ?? event.order_id ?? event.id ?? eventId),
+      reference,
       businessId: String(event.business_id ?? event.metadata?.business_id ?? ''),
       subscriptionId: String(event.subscription_id ?? event.metadata?.subscription_id ?? ''),
-      failureReason: event.failure_reason ?? event.failureReason ?? null,
+      failureReason: event.reason ?? event.failure_reason ?? null,
       raw: payload,
     };
   }
+
+  private parsePayload(rawBody: string): Record<string, string> {
+    if (!rawBody) {
+      return {};
+    }
+
+    try {
+      const parsed = JSON.parse(rawBody) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object') {
+        return Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, String(value ?? '')]));
+      }
+    } catch {
+      // ignore and fall back to URL-encoded form parsing
+    }
+
+    const params = new URLSearchParams(rawBody);
+    return Object.fromEntries(Array.from(params.entries()).map(([key, value]) => [key, value]));
+  }
+}
+
+export class CurlecPaymentProvider extends ToyyibPayProvider {
+  public override readonly providerName: PaymentProviderName = 'CURLEC';
 }
 
 export function resolveNextSubscriptionStatus(currentStatus: string, paymentStatus: PaymentStatus): string {

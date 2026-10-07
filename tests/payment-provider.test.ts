@@ -1,10 +1,17 @@
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
-import { CurlecPaymentProvider, PaymentIdempotencyGuard, resolveNextSubscriptionStatus } from '../packages/payments';
+import { PaymentIdempotencyGuard, ToyyibPayProvider, resolveNextSubscriptionStatus } from '../packages/payments';
 
-describe('Curlec payment gateway', () => {
-  it('creates a sandbox checkout session without exposing live secrets', () => {
-    const provider = new CurlecPaymentProvider({ mode: 'sandbox', secret: 'sandbox-curlec-secret' });
+describe('ToyyibPay payment gateway', () => {
+  it('creates a sandbox bill URL and enforces the RM29 amount', () => {
+    const provider = new ToyyibPayProvider({
+      mode: 'sandbox',
+      secret: 'sandbox-toyyibpay-secret',
+      categoryCode: 'sandbox-category',
+      baseUrl: 'https://toyyibpay.com',
+    });
     const session = provider.createCheckoutSession({
       businessId: 'business-123',
       subscriptionId: 'sub-123',
@@ -14,20 +21,22 @@ describe('Curlec payment gateway', () => {
       customerName: 'Demo Owner',
     });
 
-    expect(session.provider).toBe('CURLEC');
+    expect(session.provider).toBe('TOYYIBPAY');
     expect(session.mode).toBe('sandbox');
-    expect(session.sessionUrl).toContain('sandbox.curlec.com');
+    expect(session.sessionUrl).toContain('toyyibpay.com');
     expect(session.amount).toBe('29.00');
+    expect(session.metadata.business_id).toBe('business-123');
   });
 
-  it('verifies a webhook signature and rejects tampering', () => {
-    const provider = new CurlecPaymentProvider({ mode: 'sandbox', secret: 'sandbox-curlec-secret' });
-    const payload = JSON.stringify({ event_id: 'evt-123', status: 'SUCCESS', amount: '29.00', currency: 'MYR' });
-    const valid = provider.verifyWebhookSignature(payload, `sha256=${Buffer.from('fake').toString('hex')}`);
-    expect(valid).toBe(false);
+  it('verifies the official ToyyibPay callback hash and rejects tampering', () => {
+    const provider = new ToyyibPayProvider({ mode: 'sandbox', secret: 'sandbox-toyyibpay-secret' });
+    const orderId = 'OPSFINANCE-business-123';
+    const refNo = 'REF-123';
+    const hash = createHash('md5').update(`sandbox-toyyibpay-secret1${orderId}${refNo}ok`).digest('hex');
+    const payload = JSON.stringify({ status: '1', order_id: orderId, refno: refNo, hash });
 
-    const signature = `sha256=${Buffer.from('not-real').toString('hex')}`;
-    expect(provider.verifyWebhookSignature(payload, signature)).toBe(false);
+    expect(provider.verifyWebhookSignature(payload, hash)).toBe(true);
+    expect(provider.verifyWebhookSignature(payload, 'bad-hash')).toBe(false);
   });
 
   it('applies the correct subscription state transitions for successful and failed payments', () => {
