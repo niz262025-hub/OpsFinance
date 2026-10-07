@@ -1,20 +1,6 @@
-import type { Metadata } from 'next';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'OpsFinance | Accounting Made Simple',
-  description:
-    'OpsFinance helps Malaysian SMEs record transactions, upload bank statements and invoices, and view financial reports.',
-  alternates: {
-    canonical: 'https://myops.com.my/opsfinance',
-  },
-  openGraph: {
-    title: 'OpsFinance | Accounting Made Simple',
-    description: 'A simple, cloud-based accounting system for Malaysian SMEs.',
-    type: 'website',
-    url: 'https://myops.com.my/opsfinance',
-    locale: 'ms_MY',
-  },
-};
+import { useState } from 'react';
 
 const features = [
   {
@@ -88,6 +74,8 @@ const trustItems = [
 ];
 
 export default function OpsFinanceLandingPage() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
     <main className="opsfinance-page">
       <div className="opsfinance-shell">
@@ -100,12 +88,12 @@ export default function OpsFinanceLandingPage() {
             </div>
           </div>
 
-          <nav className="main-nav" aria-label="Primary navigation">
-            <a href="#features">Features</a>
-            <a href="#pricing">Pricing</a>
-            <a href="#about">About Us</a>
-            <a href="#resources">Resources</a>
-            <a href="#contact">Contact</a>
+          <nav id="opsfinance-mobile-nav" className={`main-nav ${mobileMenuOpen ? 'nav-open' : ''}`} aria-label="Primary navigation">
+            <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
+            <a href="#pricing" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
+            <a href="#about" onClick={() => setMobileMenuOpen(false)}>About Us</a>
+            <a href="#resources" onClick={() => setMobileMenuOpen(false)}>Resources</a>
+            <a href="#contact" onClick={() => setMobileMenuOpen(false)}>Contact</a>
           </nav>
 
           <div className="header-tools">
@@ -121,6 +109,19 @@ export default function OpsFinanceLandingPage() {
               </a>
             </div>
           </div>
+
+          <button
+            type="button"
+            className="mobile-menu-toggle"
+            aria-label="Toggle navigation menu"
+            aria-controls="opsfinance-mobile-nav"
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen((value) => !value)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
         </header>
 
         <section className="hero-section" aria-labelledby="hero-heading">

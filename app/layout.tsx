@@ -2,8 +2,20 @@ import './globals.css';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'OpsFinance',
-  description: 'OpsFinance accounting platform',
+  metadataBase: new URL('https://myops.com.my'),
+  title: 'OpsFinance | Accounting Made Simple',
+  description:
+    'OpsFinance helps Malaysian SMEs record transactions, upload bank statements and invoices, and view financial reports.',
+  alternates: {
+    canonical: '/opsfinance',
+  },
+  openGraph: {
+    title: 'OpsFinance | Accounting Made Simple',
+    description: 'The simple cloud-based accounting platform for Malaysian SMEs.',
+    url: 'https://myops.com.my/opsfinance',
+    type: 'website',
+    locale: 'ms_MY',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
