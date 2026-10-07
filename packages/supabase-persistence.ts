@@ -329,7 +329,9 @@ export class SupabaseSubscriptionRepository extends SupabaseRepositoryAdapter<an
       const message = error instanceof Error ? error.message : String(error ?? '');
       const isEnumMismatch = /invalid input value for enum subscription_status_enum|subscription_status_enum/i.test(message);
       if (preferredStatus === 'TRIAL' && isEnumMismatch) {
-        return persistWithStatus('ACTIVE');
+        throw new Error(
+          'Supabase subscription_status_enum is missing TRIAL. Apply the live migration before creating a trial subscription.',
+        );
       }
       throw error;
     }
