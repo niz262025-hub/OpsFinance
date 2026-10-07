@@ -1,5 +1,5 @@
 export type Role = 'OWNER' | 'ADMIN' | 'ACCOUNTANT' | 'STAFF' | 'VIEWER';
-export type SubscriptionStatus = 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'SUSPENDED';
+export type SubscriptionStatus = 'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'SUSPENDED' | 'CANCELLED';
 export type AccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'COGS' | 'EXPENSE';
 export type NormalBalance = 'DEBIT' | 'CREDIT';
 
@@ -39,6 +39,8 @@ export interface Subscription {
   status: SubscriptionStatus;
   currentPeriodStart: string;
   currentPeriodEnd: string;
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
   gracePeriodEnd?: string | null;
   createdAt: string;
   updatedAt: string;
