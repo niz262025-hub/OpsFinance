@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="OpsFinance icon">
+  <defs>
+    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff7aa5"/>
+      <stop offset="50%" stop-color="#ff9b3f"/>
+      <stop offset="100%" stop-color="#7a68ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="#f8edf5"/>
+  <rect x="7" y="7" width="50" height="50" rx="16" fill="url(#g1)"/>
+  <path d="M21 44V20h7.5c6 0 8.8 3.5 8.8 8.3 0 4.6-2.9 8.2-8.7 8.2H26V44h-5zm10.8-15.3c2.9 0 4.3-1.7 4.3-4.1 0-2.4-1.4-3.7-4.3-3.7H26v7.8h5.8z" fill="#fff"/>
+  <path d="M39 44l-4.5-12.5h5.1L44.8 44h-5.8zm1.3-23.5h5l-8 22.5h-5.1l8-22.5z" fill="#fff" opacity="0.9"/>
+</svg>

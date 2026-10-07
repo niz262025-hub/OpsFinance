@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/register', '/auth/callback'];
+const PUBLIC_PATHS = ['/login', '/register', '/auth/callback', '/opsfinance', '/'];
 const PROTECTED_PATH_PREFIXES = ['/dashboard', '/accounts', '/transactions', '/upload', '/reconciliation', '/reports', '/settings'];
 
 export async function middleware(request: NextRequest) {
@@ -34,6 +34,7 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isRootPath = pathname === '/';
+  const isMarketingPath = pathname === '/opsfinance' || pathname.startsWith('/opsfinance/');
   const isPublicPath = PUBLIC_PATHS.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
   const isProtectedPath = PROTECTED_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 
@@ -47,6 +48,10 @@ export async function middleware(request: NextRequest) {
     }
 
     return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
+  if (isMarketingPath) {
+    return response;
   }
 
   if (isProtectedPath && !user) {
