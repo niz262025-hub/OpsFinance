@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 
+import { clearSupabaseSessionStorage, navigateToLogin } from '../lib/auth/navigation';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
 export function LogoutButton() {
@@ -9,10 +10,24 @@ export function LogoutButton() {
 
   const handleLogout = async () => {
     const supabase = getSupabaseBrowserClient();
+
+    clearSupabaseSessionStorage();
+    navigateToLogin((url) => {
+      if (typeof window !== 'undefined') {
+        window.location.replace(url);
+        return;
+      }
+
+      router.replace(url);
+    });
+
     if (supabase) {
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // Sign-out is best-effort; the browser is already navigated back to the login page.
+      }
     }
-    router.push('/login');
   };
 
   return (

@@ -58,7 +58,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  if (isPublicPath && user && pathname !== '/auth/callback') {
+  const wasSignedOut = request.nextUrl.searchParams.get('logout') === '1';
+
+  if (isPublicPath && user && pathname !== '/auth/callback' && !wasSignedOut) {
     const redirectTarget = request.nextUrl.searchParams.get('redirect') ?? '/dashboard';
     return NextResponse.redirect(new URL(redirectTarget, request.url));
   }

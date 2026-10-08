@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { clearSupabaseSessionStorage, navigateToLogin } from '../lib/auth/navigation';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
 type AuthenticatedAppShellProps = {
@@ -122,10 +123,24 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
 
   const signOut = async () => {
     const supabase = getSupabaseBrowserClient();
+
+    clearSupabaseSessionStorage();
+    navigateToLogin((url) => {
+      if (typeof window !== 'undefined') {
+        window.location.replace(url);
+        return;
+      }
+
+      router.replace(url);
+    });
+
     if (supabase) {
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // Sign-out is best-effort; the browser is already navigated back to the login page.
+      }
     }
-    router.push('/login');
   };
 
   return (
