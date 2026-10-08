@@ -14,12 +14,12 @@ describe('Phase 8 subscription ui contract', () => {
     expect(screen.getByText(/Payment provider: Not configured/i)).toBeTruthy();
   });
 
-  it('renders subscription status and payment history data', () => {
+  it('renders subscription status and deferred payment messaging', () => {
     render(createElement(SubscriptionSettings));
 
     expect(screen.getByText(/Current status/i)).toBeTruthy();
-    expect(screen.getByText(/Payment history/i)).toBeTruthy();
-    expect(screen.getByText(/INV-SUB-001/i)).toBeTruthy();
-    expect(screen.getByText(/29\.00 MYR/i)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /Payment history/i })).toBeTruthy();
+    expect(screen.getByText(/No payment history yet\. Subscription payment is deferred\./i)).toBeTruthy();
+    expect(screen.getByText(/Subscription payment is not yet available\./i)).toBeTruthy();
   });
 });
