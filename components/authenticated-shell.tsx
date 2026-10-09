@@ -130,7 +130,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
 
   return (
     <>
-      <style jsx>{`
+      <style>{`
         @media (max-width: 900px) {
           .opsfinance-sidebar { display: none !important; }
           .opsfinance-mobile-toggle { display: inline-flex !important; }
@@ -139,7 +139,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
           .opsfinance-mobile-toggle { display: none !important; }
         }
       `}</style>
-      <div style={{ display: 'flex', minHeight: '100vh', maxHeight: '100vh', overflow: 'hidden', background: '#f8fafc', color: '#0f172a', fontFamily: 'Arial, sans-serif' }}>
+      <div style={{ display: 'flex', minHeight: '100vh', height: '100vh', background: '#f8fafc', color: '#0f172a', fontFamily: 'Arial, sans-serif' }}>
         <aside
           className="opsfinance-sidebar"
           style={{
@@ -182,7 +182,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
           </button>
         </aside>
 
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100vh', overflow: 'hidden' }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
           <header
             style={{
               display: 'flex',
@@ -230,7 +230,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
             </div>
           ) : null}
 
-          <main style={{ flex: 1, padding: '1.5rem 1rem 2rem', overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch' }}>{children}</main>
+          <main style={{ flex: 1, padding: '1.5rem 1rem 2rem', overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', minHeight: 0 }}>{children}</main>
         </div>
       </div>
     </>

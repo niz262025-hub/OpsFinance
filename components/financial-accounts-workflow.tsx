@@ -37,7 +37,7 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const formRef = useCallback((node: HTMLElement | null) => {
-    if (node) {
+    if (node && typeof node.scrollIntoView === 'function') {
       node.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, []);
