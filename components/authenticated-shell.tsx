@@ -2,9 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
-import { clearSupabaseSessionStorage, navigateToLogin } from '../lib/auth/navigation';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
 type AuthenticatedAppShellProps = {
@@ -123,29 +122,15 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
 
   const signOut = async () => {
     const supabase = getSupabaseBrowserClient();
-
-    clearSupabaseSessionStorage();
-    navigateToLogin((url) => {
-      if (typeof window !== 'undefined') {
-        window.location.replace(url);
-        return;
-      }
-
-      router.replace(url);
-    });
-
     if (supabase) {
-      try {
-        await supabase.auth.signOut();
-      } catch {
-        // Sign-out is best-effort; the browser is already navigated back to the login page.
-      }
+      await supabase.auth.signOut();
     }
+    router.push('/login');
   };
 
   return (
     <>
-      <style jsx>{`
+      <style>{`
         @media (max-width: 900px) {
           .opsfinance-sidebar { display: none !important; }
           .opsfinance-mobile-toggle { display: inline-flex !important; }
@@ -154,7 +139,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
           .opsfinance-mobile-toggle { display: none !important; }
         }
       `}</style>
-      <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', color: '#0f172a', fontFamily: 'Arial, sans-serif' }}>
+      <div style={{ display: 'flex', minHeight: '100vh', height: '100vh', background: '#f8fafc', color: '#0f172a', fontFamily: 'Arial, sans-serif' }}>
         <aside
           className="opsfinance-sidebar"
           style={{
@@ -169,6 +154,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
             position: 'sticky',
             top: 0,
             height: '100vh',
+            overflowY: 'auto',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
@@ -196,7 +182,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
           </button>
         </aside>
 
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100vh', height: '100vh', overflow: 'hidden' }}>
           <header
             style={{
               display: 'flex',
@@ -209,6 +195,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
               position: 'sticky',
               top: 0,
               zIndex: 2,
+              flexShrink: 0,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -243,7 +230,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
             </div>
           ) : null}
 
-          <main style={{ padding: '1.5rem 1rem 2rem' }}>{children}</main>
+          <main style={{ flex: 1, padding: '1.5rem 1rem 2rem', overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', minHeight: 0 }}>{children}</main>
         </div>
       </div>
     </>

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 type FinancialAccountsWorkflowProps = {
   businessId?: string;
@@ -36,6 +36,11 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const formRef = useCallback((node: HTMLElement | null) => {
+    if (node && typeof node.scrollIntoView === 'function') {
+      node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
   const [form, setForm] = useState({
     name: '',
     type: 'BANK',
@@ -167,10 +172,14 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
 
         {businessContextError ? <div role="alert" style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 18, padding: '1rem' }}>{businessContextError}</div> : null}
 
-        <section style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1rem', display: 'grid', gap: '0.8rem' }}>
+        <section ref={formRef} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1rem', display: 'grid', gap: '0.8rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <h2 style={{ margin: 0 }}>Create new account</h2>
+            <button type="button" onClick={() => resetForm()} style={{ background: '#e2e8f0', color: '#0f172a', border: 'none', borderRadius: 10, padding: '0.6rem 0.9rem', fontWeight: 700, cursor: 'pointer' }}>Clear</button>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem' }}>
             <label style={{ display: 'grid', gap: '0.25rem' }}>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
-            <label style={{ display: 'grid', gap: '0.25rem' }}>Type<select value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}><option value="BANK">BANK</option><option value="CASH">CASH</option><option value="E_WALLET">E_WALLET</option><option value="CREDIT_CARD">CREDIT_CARD</option><option value="LOAN">LOAN</option><option value="OTHER">OTHER</option></select></label>
+            <label style={{ display: 'grid', gap: '0.25rem' }}>Type<select value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}><option value="BANK">Bank</option><option value="CASH">Cash</option><option value="E_WALLET">E-Wallet</option><option value="CREDIT_CARD">Credit Card</option><option value="LOAN">Loan</option><option value="OTHER">Other</option></select></label>
             <label style={{ display: 'grid', gap: '0.25rem' }}>Code<input value={form.accountCode} onChange={(event) => setForm((current) => ({ ...current, accountCode: event.target.value }))} /></label>
             <label style={{ display: 'grid', gap: '0.25rem' }}>Currency<input value={form.currency} onChange={(event) => setForm((current) => ({ ...current, currency: event.target.value.toUpperCase() }))} /></label>
           </div>
@@ -180,7 +189,7 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
             <label style={{ display: 'grid', gap: '0.25rem' }}>Opening date<input type="date" value={form.openingBalanceDate} onChange={(event) => setForm((current) => ({ ...current, openingBalanceDate: event.target.value }))} /></label>
             <label style={{ display: 'grid', gap: '0.25rem' }}>Status<select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></label>
           </div>
-          <button type="button" onClick={() => void handleCreate()} style={{ width: 'fit-content', background: '#0f172a', color: '#fff', border: 'none', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}>Create financial account</button>
+          <button type="button" onClick={() => void handleCreate()} style={{ width: 'fit-content', background: '#0f172a', color: '#fff', border: 'none', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}>+ Create Account</button>
         </section>
 
         {error ? <div role="alert" style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 18, padding: '1rem' }}>{error}</div> : null}
