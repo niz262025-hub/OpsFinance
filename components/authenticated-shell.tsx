@@ -139,7 +139,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
           .opsfinance-mobile-toggle { display: none !important; }
         }
       `}</style>
-      <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', color: '#0f172a', fontFamily: 'Arial, sans-serif' }}>
+      <div style={{ display: 'flex', minHeight: '100vh', maxHeight: '100vh', overflow: 'hidden', background: '#f8fafc', color: '#0f172a', fontFamily: 'Arial, sans-serif' }}>
         <aside
           className="opsfinance-sidebar"
           style={{
@@ -154,6 +154,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
             position: 'sticky',
             top: 0,
             height: '100vh',
+            overflowY: 'auto',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
@@ -181,7 +182,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
           </button>
         </aside>
 
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100vh', overflow: 'hidden' }}>
           <header
             style={{
               display: 'flex',
@@ -194,6 +195,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
               position: 'sticky',
               top: 0,
               zIndex: 2,
+              flexShrink: 0,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -228,7 +230,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
             </div>
           ) : null}
 
-          <main style={{ padding: '1.5rem 1rem 2rem' }}>{children}</main>
+          <main style={{ flex: 1, padding: '1.5rem 1rem 2rem', overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch' }}>{children}</main>
         </div>
       </div>
     </>
