@@ -1,13 +1,12 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { navigateToDashboard } from '../../lib/auth/navigation';
 import { normalizeAuthError } from '../../lib/auth/session';
 import { getSupabaseBrowserClient } from '../../lib/supabase/client';
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
@@ -54,7 +53,7 @@ export default function RegisterPage() {
 
     if (data.session) {
       setStatus('Account created successfully.');
-      router.push('/dashboard');
+      navigateToDashboard();
       return;
     }
 
@@ -64,7 +63,7 @@ export default function RegisterPage() {
   return (
     <main style={{ maxWidth: 420, margin: '4rem auto', padding: '2rem', background: '#fff', borderRadius: 12 }}>
       <h1>Register</h1>
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} method="post">
         <div style={{ display: 'grid', gap: '1rem' }}>
           <label>
             Name

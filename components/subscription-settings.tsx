@@ -95,13 +95,7 @@ export function SubscriptionSettings() {
   const service = useMemo(() => new SubscriptionService(), []);
   const [subscription, setSubscription] = useState<SubscriptionRecord>(() => {
     const record = service.registerBusiness(BUSINESS_ID, ACTOR_ID);
-    const paymentHistory = service.getPaymentHistory(record.id);
-    if (paymentHistory.length === 0) {
-      const payment = service.initiatePayment(record.id, 'INV-SUB-001', '29.00', 'MYR', ACTOR_ID, 'evt-sub-demo');
-      service.recordPaymentStatus(record.id, 'evt-sub-demo', 'PAID', ACTOR_ID);
-      return service.getBusinessSubscription(BUSINESS_ID);
-    }
-    return record;
+    return service.getBusinessSubscription(BUSINESS_ID);
   });
 
   const [paymentHistory, setPaymentHistory] = useState<PaymentRecord[]>(() => service.getPaymentHistory(subscription.id));
@@ -137,7 +131,7 @@ export function SubscriptionSettings() {
         <section style={{ border: '1px solid #d0d7de', borderRadius: '12px', padding: '1.25rem', background: '#fff' }}>
           <p style={{ margin: 0, color: '#57606a', fontSize: '0.8rem', textTransform: 'uppercase' }}>Provider</p>
           <p style={{ margin: '0.75rem 0 0', fontWeight: 600 }}>Payment provider: {config.livePaymentProvider === 'NOT_CONFIGURED' ? 'Not configured' : config.livePaymentProvider}</p>
-          <p style={{ margin: '0.5rem 0 0', color: '#57606a' }}>No live provider credentials are configured.</p>
+          <p style={{ margin: '0.5rem 0 0', color: '#57606a' }}>Subscription payment is not yet available. Paid-only features remain gated until a real backend subscription is active.</p>
         </section>
       </div>
 
@@ -148,6 +142,7 @@ export function SubscriptionSettings() {
           <li><strong>Grace period:</strong> {subscription.gracePeriodStart && subscription.gracePeriodEnd ? `${formatDate(subscription.gracePeriodStart)} → ${formatDate(subscription.gracePeriodEnd)}` : 'Not in grace period'}</li>
           <li><strong>Suspension:</strong> {subscription.suspendedAt ? `Suspended on ${formatDate(subscription.suspendedAt)}` : 'Not suspended'}</li>
           <li><strong>Payment activity:</strong> {paymentHistory.length > 0 ? `${paymentHistory.length} record(s)` : 'No payment history yet'}</li>
+          <li><strong>Trial status:</strong> {subscription.status === 'ACTIVE' ? 'Trial active' : subscription.status}</li>
         </ul>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '1rem' }}>
@@ -175,7 +170,7 @@ export function SubscriptionSettings() {
       <section style={{ marginTop: '2rem', border: '1px solid #d0d7de', borderRadius: '12px', padding: '1.5rem', background: '#fff' }}>
         <h3 style={{ marginTop: 0 }}>Payment history</h3>
         {paymentHistory.length === 0 ? (
-          <p>No payment history yet.</p>
+          <p>No payment history yet. Subscription payment is deferred.</p>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>

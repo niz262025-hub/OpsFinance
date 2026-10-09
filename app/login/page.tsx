@@ -53,7 +53,7 @@ export default function LoginPage() {
   return (
     <main style={{ maxWidth: 420, margin: '4rem auto', padding: '2rem', background: '#fff', borderRadius: 12 }}>
       <h1>Login</h1>
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} method="post">
         <div style={{ display: 'grid', gap: '1rem' }}>
           <label>
             Email

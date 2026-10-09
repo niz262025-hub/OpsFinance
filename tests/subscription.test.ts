@@ -325,4 +325,36 @@ describe('Phase 8 subscription and billing', () => {
       createdBy: 'attacker',
     })).toThrow('Business access denied.');
   });
+
+  it('gives every new business a 7-day free trial and blocks paid-only features during the trial', () => {
+    const service = new SubscriptionService();
+    const subscription = service.registerBusiness('business-trial', 'owner-trial');
+
+    expect(subscription.trialStartedAt).toBeTruthy();
+    expect(subscription.trialEndsAt).toBeTruthy();
+    expect(service.getTrialState('business-trial', 'owner-trial').isActive).toBe(true);
+
+    expect(() => service.assertFeatureAccess('business-trial', 'report_print', 'owner-trial')).toThrow('Feature access denied.');
+    expect(() => service.assertFeatureAccess('business-trial', 'report_export', 'owner-trial')).toThrow('Feature access denied.');
+    expect(() => service.assertFeatureAccess('business-trial', 'reconciliation', 'owner-trial')).toThrow('Feature access denied.');
+    expect(() => service.assertFeatureAccess('business-trial', 'reports', 'owner-trial', 'READ')).not.toThrow();
+    expect(() => service.assertFeatureAccess('business-trial', 'account_statement_view', 'owner-trial', 'READ')).not.toThrow();
+  });
+
+  it('expires the 7-day trial without deleting data and keeps paid-only actions restricted until payment succeeds', () => {
+    const service = new SubscriptionService();
+    const subscription = service.registerBusiness('business-expired', 'owner-expired');
+    const record = (service as any).subscriptions.get(subscription.id);
+    record.trialEndsAt = new Date(Date.now() - 60 * 1000).toISOString();
+
+    expect(service.getBusinessSubscription('business-expired', 'owner-expired').status).toBe('PAST_DUE');
+    expect(service.getTrialState('business-expired', 'owner-expired').isActive).toBe(false);
+    expect(() => service.assertFeatureAccess('business-expired', 'report_download', 'owner-expired')).toThrow('Feature access denied.');
+
+    service.initiatePayment(subscription.id, 'INV-TRIAL-CLEAR', '29.00', 'MYR', 'owner-expired', 'evt-trial-clear');
+    service.recordPaymentStatus(subscription.id, 'evt-trial-clear', 'PAID', 'owner-expired');
+
+    expect(service.getBusinessSubscription('business-expired', 'owner-expired').status).toBe('ACTIVE');
+    expect(() => service.assertFeatureAccess('business-expired', 'report_download', 'owner-expired')).not.toThrow();
+  });
 });

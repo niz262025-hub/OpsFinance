@@ -1,5 +1,5 @@
 export type PlanCode = 'STARTER';
-export type SubscriptionLifecycleStatus = 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'SUSPENDED' | 'CANCELLED';
+export type SubscriptionLifecycleStatus = 'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'SUSPENDED' | 'CANCELLED';
 export type PaymentStatus = 'INITIATED' | 'PENDING' | 'AUTHORIZED' | 'PAID' | 'FAILED' | 'CANCELLED' | 'REFUNDED';
 export type AccessOperation = 'READ' | 'WRITE';
 export type BillingFeature =
@@ -7,8 +7,16 @@ export type BillingFeature =
   | 'transactions'
   | 'accounts'
   | 'upload_and_convert'
-  | 'reconciliation'
   | 'reports'
+  | 'reports_view'
+  | 'report_print'
+  | 'report_download'
+  | 'report_export'
+  | 'account_statement_view'
+  | 'account_statement_print'
+  | 'account_statement_download'
+  | 'account_statement_export'
+  | 'reconciliation'
   | 'settings'
   | 'accounting_rules'
   | 'multi_user'
@@ -42,6 +50,8 @@ export interface SubscriptionRecord {
   currentPeriodStart: string;
   currentPeriodEnd: string;
   nextBillingDate: string;
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
   gracePeriodStart?: string | null;
   gracePeriodEnd?: string | null;
   suspendedAt?: string | null;
@@ -107,8 +117,16 @@ export const STARTER_PLAN: PlanDefinition = {
     'transactions',
     'accounts',
     'upload_and_convert',
-    'reconciliation',
     'reports',
+    'reports_view',
+    'report_print',
+    'report_download',
+    'report_export',
+    'account_statement_view',
+    'account_statement_print',
+    'account_statement_download',
+    'account_statement_export',
+    'reconciliation',
     'settings',
     'accounting_rules',
   ],
@@ -125,12 +143,35 @@ export const DEFAULT_BILLING_CONFIGURATION: BillingConfiguration = {
 };
 
 const TRANSITIONS: Record<SubscriptionLifecycleStatus, SubscriptionLifecycleStatus[]> = {
+  TRIAL: ['ACTIVE', 'PAST_DUE', 'CANCELLED'],
   ACTIVE: ['ACTIVE', 'PAST_DUE', 'CANCELLED'],
   PAST_DUE: ['ACTIVE', 'GRACE_PERIOD'],
   GRACE_PERIOD: ['ACTIVE', 'SUSPENDED'],
   SUSPENDED: ['ACTIVE'],
   CANCELLED: [],
 };
+
+const TRIAL_ALLOWED_FEATURES = new Set<BillingFeature>([
+  'dashboard',
+  'transactions',
+  'accounts',
+  'upload_and_convert',
+  'reports',
+  'reports_view',
+  'account_statement_view',
+  'settings',
+  'accounting_rules',
+]);
+
+const TRIAL_RESTRICTED_FEATURES = new Set<BillingFeature>([
+  'report_print',
+  'report_download',
+  'report_export',
+  'account_statement_print',
+  'account_statement_download',
+  'account_statement_export',
+  'reconciliation',
+]);
 
 export class SubscriptionService {
   private readonly subscriptions = new Map<string, SubscriptionRecord>();
@@ -158,6 +199,46 @@ export class SubscriptionService {
     return STARTER_PLAN;
   }
 
+  private hasSuccessfulPaidPayment(subscriptionId: string): boolean {
+    return (this.paymentsBySubscription.get(subscriptionId) ?? []).some((payment) => payment.status === 'PAID');
+  }
+
+  private isTrialActiveRecord(subscription: SubscriptionRecord): boolean {
+    if (subscription.status === 'CANCELLED' || subscription.status === 'SUSPENDED') {
+      return false;
+    }
+
+    if (!subscription.trialEndsAt || this.hasSuccessfulPaidPayment(subscription.id)) {
+      return false;
+    }
+
+    const endsAt = new Date(subscription.trialEndsAt).getTime();
+    return Number.isFinite(endsAt) && Date.now() < endsAt;
+  }
+
+  private syncSubscriptionLifecycle(subscription: SubscriptionRecord): void {
+    if (subscription.status === 'CANCELLED' || subscription.status === 'SUSPENDED') {
+      return;
+    }
+
+    if (this.hasSuccessfulPaidPayment(subscription.id)) {
+      if (['ACTIVE', 'TRIAL', 'PAST_DUE'].includes(subscription.status)) {
+        subscription.status = 'ACTIVE';
+        subscription.trialEndsAt = null;
+        subscription.updatedAt = new Date().toISOString();
+      }
+      return;
+    }
+
+    if (subscription.trialEndsAt && ['ACTIVE', 'TRIAL'].includes(subscription.status)) {
+      const endsAt = new Date(subscription.trialEndsAt).getTime();
+      if (Number.isFinite(endsAt) && Date.now() >= endsAt) {
+        subscription.status = 'PAST_DUE';
+        subscription.updatedAt = new Date().toISOString();
+      }
+    }
+  }
+
   getBusinessSubscription(businessId: string, actor?: string): SubscriptionRecord {
     if (actor) this.assertBusinessMember(businessId, actor);
     const subscriptionId = this.businessSubscriptionById.get(businessId);
@@ -168,7 +249,32 @@ export class SubscriptionService {
     if (!subscription) {
       throw new Error('Subscription record missing.');
     }
+    this.syncSubscriptionLifecycle(subscription);
     return { ...subscription };
+  }
+
+  getTrialState(businessId: string, actor?: string): {
+    businessId: string;
+    isActive: boolean;
+    daysRemaining: number;
+    startedAt: string | null;
+    endsAt: string | null;
+    status: SubscriptionLifecycleStatus;
+  } {
+    const subscription = this.getBusinessSubscription(businessId, actor);
+    const endsAt = subscription.trialEndsAt ?? null;
+    const startedAt = subscription.trialStartedAt ?? null;
+    const isActive = this.isTrialActiveRecord(subscription);
+    const daysRemaining = endsAt ? Math.max(0, Math.ceil((new Date(endsAt).getTime() - Date.now()) / 86400000)) : 0;
+
+    return {
+      businessId,
+      isActive,
+      daysRemaining,
+      startedAt,
+      endsAt,
+      status: subscription.status,
+    };
   }
 
   getAuditTrail(subscriptionId: string, actor?: string): BillingAuditEvent[] {
@@ -238,12 +344,6 @@ export class SubscriptionService {
     }
   }
 
-  private assertCancelableState(subscription: SubscriptionRecord): void {
-    if (subscription.status === 'CANCELLED') {
-      throw new Error('Subscription is already cancelled.');
-    }
-  }
-
   private ensureStarterBusinessLimit(businessId: string, userId: string): void {
     const existingSubscription = this.businessSubscriptionById.get(businessId);
     if (existingSubscription) {
@@ -283,6 +383,8 @@ export class SubscriptionService {
       currentPeriodStart: now,
       currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      trialStartedAt: now,
+      trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       gracePeriodStart: null,
       gracePeriodEnd: null,
       suspendedAt: null,
@@ -334,6 +436,11 @@ export class SubscriptionService {
   assertFeatureAccess(businessId: string, feature: BillingFeature, actor: string, operation: AccessOperation = 'WRITE'): void {
     const subscription = this.getBusinessSubscription(businessId, actor);
     const definition = this.getPlanDefinition(subscription.plan);
+
+    this.syncSubscriptionLifecycle(subscription);
+    const isTrial = this.isTrialActiveRecord(subscription);
+    const blockedForSubscriptionState = TRIAL_RESTRICTED_FEATURES.has(feature) && subscription.status !== 'ACTIVE';
+
     if (!definition.features.includes(feature)) {
       this.recordDeniedAccess(businessId, actor, 'entitlement_denied', feature);
       throw new Error('Feature access denied.');
@@ -341,6 +448,14 @@ export class SubscriptionService {
     if (subscription.status === 'CANCELLED' || (subscription.status === 'SUSPENDED' && operation === 'WRITE')) {
       this.recordDeniedAccess(businessId, actor, 'entitlement_denied', feature);
       throw new Error('Feature access denied.');
+    }
+    if ((isTrial || blockedForSubscriptionState) && TRIAL_RESTRICTED_FEATURES.has(feature)) {
+      this.recordDeniedAccess(businessId, actor, 'entitlement_denied', feature);
+      throw new Error('Feature access denied.');
+    }
+    if (isTrial && feature === 'reports' && operation === 'READ') {
+      this.setAuditEvent(subscription.id, businessId, actor, 'feature_access_checked', feature, { allowed: true, feature, operation, trial: true });
+      return;
     }
     this.setAuditEvent(subscription.id, businessId, actor, 'feature_access_checked', feature, { allowed: true, feature, operation });
   }
@@ -357,9 +472,6 @@ export class SubscriptionService {
   transitionStatus(subscriptionId: string, nextStatus: SubscriptionLifecycleStatus, actor: string): SubscriptionRecord {
     const subscription = this.getSubscription(subscriptionId);
     this.assertBusinessOwnerForSubscription(subscription, actor);
-    if (subscription.status === 'CANCELLED') {
-      throw new Error('Cancelled subscriptions cannot transition to a new status.');
-    }
     if (nextStatus === 'ACTIVE' && subscription.status === 'SUSPENDED') {
       throw new Error('Suspended subscriptions require payment-backed reactivation.');
     }
@@ -395,9 +507,6 @@ export class SubscriptionService {
   reactivateSubscription(subscriptionId: string, actor: string): SubscriptionRecord {
     const subscription = this.getSubscription(subscriptionId);
     this.assertBusinessOwnerForSubscription(subscription, actor);
-    if (subscription.status === 'CANCELLED') {
-      throw new Error('Cancelled subscriptions cannot be reactivated.');
-    }
 
     const allowedStatuses: SubscriptionLifecycleStatus[] = ['PAST_DUE', 'GRACE_PERIOD', 'SUSPENDED'];
     if (!allowedStatuses.includes(subscription.status)) {
@@ -424,9 +533,6 @@ export class SubscriptionService {
   initiatePayment(subscriptionId: string, invoiceReference: string, amount: string, currency: string, actor: string, providerEventId?: string): PaymentRecord {
     const subscription = this.getSubscription(subscriptionId);
     this.assertBusinessOwnerForSubscription(subscription, actor);
-    if (subscription.status === 'CANCELLED') {
-      throw new Error('Cancelled subscriptions cannot accept new payment activity.');
-    }
     if (amount !== subscription.monthlyPrice || currency.toUpperCase() !== subscription.currency) {
       throw new Error('Payment amount or currency does not match the subscription.');
     }
@@ -519,6 +625,16 @@ export class SubscriptionService {
     payment.updatedAt = new Date().toISOString();
     if (status === 'PAID') {
       payment.paymentDate = new Date().toISOString();
+
+      if (['ACTIVE', 'TRIAL', 'PAST_DUE', 'GRACE_PERIOD'].includes(subscription.status)) {
+        subscription.status = 'ACTIVE';
+        subscription.trialEndsAt = null;
+        subscription.trialStartedAt = null;
+        subscription.gracePeriodStart = null;
+        subscription.gracePeriodEnd = null;
+        subscription.suspendedAt = null;
+        subscription.updatedAt = new Date().toISOString();
+      }
     }
     if (failureReason) {
       payment.failureReason = failureReason;
@@ -539,9 +655,6 @@ export class SubscriptionService {
   renewSubscription(subscriptionId: string, actor: string): SubscriptionRecord {
     const subscription = this.getSubscription(subscriptionId);
     this.assertBusinessOwnerForSubscription(subscription, actor);
-    if (subscription.status === 'CANCELLED') {
-      throw new Error('Cancelled subscriptions cannot be renewed.');
-    }
 
     const payment = this.paymentsBySubscription.get(subscriptionId)?.find((entry) => entry.status === 'PAID') ?? null;
     if (!payment) {
@@ -559,6 +672,8 @@ export class SubscriptionService {
     subscription.currentPeriodEnd = new Date(oldPeriodEnd.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
     subscription.nextBillingDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
     subscription.status = 'ACTIVE';
+    subscription.trialStartedAt = null;
+    subscription.trialEndsAt = null;
     subscription.gracePeriodStart = null;
     subscription.gracePeriodEnd = null;
     subscription.suspendedAt = null;
@@ -591,7 +706,6 @@ export class SubscriptionService {
   cancelSubscription(subscriptionId: string, actor: string, effectiveAt: 'IMMEDIATE' | 'PERIOD_END' = 'PERIOD_END'): SubscriptionRecord {
     const subscription = this.getSubscription(subscriptionId);
     this.assertBusinessOwnerForSubscription(subscription, actor);
-    this.assertCancelableState(subscription);
 
     if (effectiveAt === 'PERIOD_END') {
       this.assertStatusTransition(subscription.status, 'CANCELLED');
