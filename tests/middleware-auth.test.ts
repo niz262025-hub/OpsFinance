@@ -39,22 +39,16 @@ describe('auth middleware session boundary', () => {
     expect(response.headers.get('location')).toBe('http://localhost/login');
   });
 
-  it('forces preview-only bypass to dashboard without requiring a separate OpsFinance login', async () => {
+  it('does not bypass authentication on Vercel preview', async () => {
     vi.stubEnv('NEXT_PUBLIC_PREVIEW_AUTH_BYPASS', 'true');
     vi.stubEnv('VERCEL_ENV', 'preview');
-
     const root = await middleware(new NextRequest('http://localhost/'));
     const login = await middleware(new NextRequest('http://localhost/login'));
     const opsfinance = await middleware(new NextRequest('http://localhost/opsfinance'));
-
-    expect(root.status).toBe(307);
-    expect(root.headers.get('location')).toBe('http://localhost/dashboard');
-    expect(login.status).toBe(307);
-    expect(login.headers.get('location')).toBe('http://localhost/dashboard');
+    expect(root.status).toBe(200);
+    expect(login.status).toBe(200);
     expect(opsfinance.status).toBe(307);
-    expect(opsfinance.headers.get('location')).toBe('http://localhost/dashboard');
-
-    vi.unstubAllEnvs();
+    expect(opsfinance.headers.get('location')).toBe('http://localhost/login');
   });
 
   it('never bypasses Production authentication even when both preview flags are set', async () => {
