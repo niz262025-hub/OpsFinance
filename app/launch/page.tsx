@@ -9,10 +9,13 @@ export default function LaunchPage() {
   useEffect(() => {
     const fragment = window.location.hash;
     window.history.replaceState(null, '', '/launch');
-    const valid = isLaunchTicketFragment(fragment);
-    setStatus(valid
-      ? 'Secure launch is not yet available. Please return to MYOPS.'
-      : 'Launch request is invalid. Please return to MYOPS.');
+    if (!isLaunchTicketFragment(fragment)) {
+      setStatus('Launch request is invalid. Please return to MYOPS.');
+      return;
+    }
+    // The fragment is deliberately not posted until the backend can both
+    // redeem it and create a real, authorized Supabase user session.
+    setStatus('MYOPS single sign-on is being configured. No ticket was consumed. Please return to MYOPS.');
   }, []);
 
   return (
