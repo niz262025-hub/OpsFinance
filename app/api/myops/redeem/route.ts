@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redeemMyopsTicket } from '../../../../lib/auth/myops-app-client';
+import { requireLinkedFinanceAccount } from '../../../../lib/auth/myops-account-preflight';
+import { createLinkedAuthSession } from '../../../../lib/auth/myops-session-issuer';
+import { createServerClient } from '@supabase/ssr';
+import { getSupabaseServerConfig } from '../../../../lib/supabase/server';
 
 export const runtime = 'nodejs';
 
@@ -26,8 +30,31 @@ export async function POST(request: NextRequest) {
   if (typeof ticket !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(ticket)) {
     return NextResponse.json({ error: 'Invalid launch ticket' }, { status: 400, headers });
   }
-  // Redeeming now would irreversibly consume a ticket without signing the user in.
-  // Keep the server client referenced until the verified identity/session bridge is ready.
-  void redeemMyopsTicket;
-  return NextResponse.json({ error: 'SSO session provisioning is not enabled' }, { status: 503, headers });
+  if (process.env.MYOPS_SSO_ENABLED !== 'true') {
+    return NextResponse.json({ error: 'SSO session provisioning is not enabled' }, { status: 503, headers });
+  }
+  try {
+    const redeemed = await redeemMyopsTicket(ticket);
+    const userId = await requireLinkedFinanceAccount(redeemed.user_ref);
+    const session = await createLinkedAuthSession(userId);
+    const { url, anonKey } = getSupabaseServerConfig();
+    const response = NextResponse.json({ redirectTo: '/dashboard' }, { headers });
+    const client = createServerClient(url, anonKey, {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (items) => {
+          for (const item of items) {
+            response.cookies.set(item.name, item.value, { ...item.options, secure: request.nextUrl.protocol === 'https:', path: '/' });
+          }
+        },
+      },
+    });
+    const result = await client.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token });
+    if (result.error || result.data.user?.id !== userId) {
+      throw new Error('Session identity mismatch');
+    }
+    return response;
+  } catch {
+    return NextResponse.json({ error: 'Unable to establish OpsFinance session' }, { status: 403, headers });
+  }
 }
