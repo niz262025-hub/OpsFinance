@@ -2,7 +2,8 @@
 
 ## Current state
 - The launch page removes the one-time ticket from the URL fragment.
-- The redemption endpoint rejects requests without creating a session; this is intentional until a secure session bridge exists.
+- The redemption endpoint is wired to a linked Supabase session bridge behind `MYOPS_SSO_ENABLED=true`; it returns 503 while the flag is disabled.
+- Automated CI passed on commit `2aa4ca6`, but live UAT SSO has not been exercised and must not be described as complete.
 - The identity mapping table is service-role only and must not grant business membership by itself.
 
 ## Required end-to-end flow
@@ -12,6 +13,12 @@
 4. OpsFinance resolves the opaque MYOPS user reference to a previously approved Supabase Auth user.
 5. OpsFinance checks the user's business membership and creates a legitimate Supabase Auth session using a supported, reviewed authentication flow. Never fabricate a JWT, accept a browser-supplied user ID, or bypass RLS.
 6. The session cookie is issued securely and the browser enters the dashboard only after authentication succeeds.
+
+## Security review before enabling UAT
+- Review the administrative magic-link exchange and confirm it cannot create or sign in a different user when a verified email is reused.
+- Confirm Supabase SSR session cookies are set only after the returned user ID matches the approved mapping, and that a failed exchange never returns authentication cookies.
+- Test repeat and concurrent redemption attempts; a consumed one-time ticket must never establish a second session.
+- Verify `MYOPS_SSO_ENABLED` remains unset in production until explicit release approval.
 
 ## Blocking prerequisites
 - Confirm and test the official Supabase session issuance method for a separate Supabase project.
