@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   getSupabasePublicConfig,
@@ -33,16 +33,11 @@ describe('auth app wiring', () => {
     expect(getMyOpsAccessDecision({ pathname: '/dashboard', user: null })).toMatchObject({ allowed: false, redirectTo: '/' });
   });
 
-  it('enables the preview-only auth bypass only in preview environments', () => {
-    process.env.NEXT_PUBLIC_PREVIEW_AUTH_BYPASS = 'true';
-    expect(isPreviewAuthBypassEnabled()).toBe(true);
-
-    process.env.NEXT_PUBLIC_PREVIEW_AUTH_BYPASS = 'false';
-    process.env.VERCEL_ENV = 'production';
+  it('disables preview auth bypass on deployed environments', () => {
+    vi.stubEnv('VERCEL_ENV', 'preview');
+    vi.stubEnv('PREVIEW_AUTH_BYPASS', 'true');
     expect(isPreviewAuthBypassEnabled()).toBe(false);
-
-    delete process.env.NEXT_PUBLIC_PREVIEW_AUTH_BYPASS;
-    delete process.env.VERCEL_ENV;
+    vi.unstubAllEnvs();
   });
 
   it('rejects expired sessions and client-side bypass attempts before any protected route renders', () => {
