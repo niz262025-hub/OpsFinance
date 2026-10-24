@@ -172,6 +172,53 @@ export class TransactionService {
     }
   }
 
+  private resolveFinancialLedgerAccountId(businessId: string, financialAccountId: string | undefined, label = 'Financial account'): string {
+    if (!financialAccountId) {
+      throw new Error(`${label} is required.`);
+    }
+
+    const financialAccount = this.getBusinessFinancialAccounts().get(financialAccountId);
+    if (!financialAccount) {
+      throw new Error(`${label} does not exist.`);
+    }
+
+    if (financialAccount.businessId !== businessId) {
+      throw new Error(`${label} does not belong to this business.`);
+    }
+
+    if (financialAccount.status === 'INACTIVE') {
+      throw new Error(`${label} is inactive.`);
+    }
+
+    const mappedAccountId = String(financialAccount.accountId ?? '').trim();
+    if (mappedAccountId) {
+      this.assertBusinessOwnedAccount(businessId, mappedAccountId, 'Cash/bank ledger account');
+      return mappedAccountId;
+    }
+
+    const fallbackAccount = [...this.getBusinessAccounts().values()].find((account) => {
+      if (account.businessId !== businessId || account.isActive === false || account.accountType !== 'ASSET') {
+        return false;
+      }
+
+      const normalized = `${account.name} ${account.code}`.toLowerCase();
+      const typeHint = `${financialAccount.type ?? ''}`.toLowerCase();
+      if (typeHint.includes('bank')) {
+        return normalized.includes('bank') || normalized.includes('cash') || normalized.includes('current') || normalized.includes('operating');
+      }
+      if (typeHint.includes('cash')) {
+        return normalized.includes('cash') || normalized.includes('bank') || normalized.includes('operating');
+      }
+      return true;
+    });
+
+    if (!fallbackAccount) {
+      throw new Error(`${label} does not have a valid chart-of-accounts cash/bank mapping.`);
+    }
+
+    return fallbackAccount.id;
+  }
+
   getTransactions(businessId: string, actor?: string): TransactionRecord[] {
     this.engine.authorizeBusiness(businessId, this.engine.businessId);
     return [...this.transactions.values()].filter((transaction) => transaction.businessId === businessId);
@@ -574,6 +621,7 @@ export class TransactionService {
   private buildJournal(input: TransactionCreateInput, amount: string): JournalInput {
     const common = {
       businessId: input.businessId,
+      journalNo: `TXN-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
       journalDate: input.date,
       sourceType: 'MANUAL' as const,
       description: input.description,
@@ -587,12 +635,19 @@ export class TransactionService {
       if (new DecimalMoney(amount).compare(DecimalMoney.zero()) <= 0) {
         throw new Error('Money In amount must be greater than zero.');
       }
-      return createMoneyInJournal({
+
+      const financialLedgerAccountId = this.resolveFinancialLedgerAccountId(input.businessId, input.financialAccountId, 'Financial account');
+      if (input.accountId === financialLedgerAccountId) {
+        throw new Error('Counter account must be different from the selected cash/bank account.');
+      }
+
+      return {
         ...common,
-        financialAccountId: input.financialAccountId,
-        revenueAccountId: input.accountId,
-        amount,
-      });
+        lines: [
+          { accountId: financialLedgerAccountId, debit: amount, description: input.description },
+          { accountId: input.accountId, credit: amount, description: input.description },
+        ],
+      };
     }
 
     if (input.type === 'MONEY_OUT') {
@@ -602,12 +657,19 @@ export class TransactionService {
       if (new DecimalMoney(amount).compare(DecimalMoney.zero()) <= 0) {
         throw new Error('Money Out amount must be greater than zero.');
       }
-      return createMoneyOutJournal({
+
+      const financialLedgerAccountId = this.resolveFinancialLedgerAccountId(input.businessId, input.financialAccountId, 'Financial account');
+      if (input.accountId === financialLedgerAccountId) {
+        throw new Error('Expense account must be different from the selected cash/bank account.');
+      }
+
+      return {
         ...common,
-        financialAccountId: input.financialAccountId,
-        expenseAccountId: input.accountId,
-        amount,
-      });
+        lines: [
+          { accountId: input.accountId, debit: amount, description: input.description },
+          { accountId: financialLedgerAccountId, credit: amount, description: input.description },
+        ],
+      };
     }
 
     if (input.type === 'TRANSFER') {

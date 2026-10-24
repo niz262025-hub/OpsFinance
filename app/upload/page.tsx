@@ -7,12 +7,98 @@ import { getPreviewBusinessContext } from '../../lib/preview-data';
 
 type UploadItem = {
   id: string;
-  label: string;
+  date: string;
+  description: string;
+  reference: string;
   amount: string;
   account: string;
   source: string;
   status: 'Ready' | 'Needs review' | 'Imported';
 };
+
+function parseCsvLine(input: string): string[] {
+  const values: string[] = [];
+  let buffer = '';
+  let insideQuotes = false;
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+
+    if (char === '"') {
+      if (insideQuotes && input[index + 1] === '"') {
+        buffer += '"';
+        index += 1;
+      } else {
+        insideQuotes = !insideQuotes;
+      }
+      continue;
+    }
+
+    if (char === ',' && !insideQuotes) {
+      values.push(buffer.trim());
+      buffer = '';
+      continue;
+    }
+
+    buffer += char;
+  }
+
+  values.push(buffer.trim());
+  return values;
+}
+
+function parseUploadedCsvRows(text: string): UploadItem[] {
+  const rows = text
+    .split(/\r?\n/)
+    .map((row) => row.trim())
+    .filter(Boolean);
+
+  if (rows.length < 2) {
+    throw new Error('CSV file does not contain any transaction rows.');
+  }
+
+  const header = parseCsvLine(rows[0]).map((column) => column.trim().toLowerCase());
+  const dateIndex = header.findIndex((column) => ['date', 'transactiondate'].includes(column));
+  const descriptionIndex = header.findIndex((column) => ['description', 'narration', 'details'].includes(column));
+  const amountIndex = header.findIndex((column) => ['amount', 'total', 'debit', 'credit'].includes(column));
+  const referenceIndex = header.findIndex((column) => ['reference', 'reference no', 'reference_no', 'ref'].includes(column));
+
+  if (dateIndex < 0 || descriptionIndex < 0 || amountIndex < 0) {
+    throw new Error('CSV must include date, description, and amount columns.');
+  }
+
+  const parsed: UploadItem[] = [];
+
+  rows.slice(1).forEach((row, rowIndex) => {
+    const values = parseCsvLine(row);
+    const date = values[dateIndex] ?? '';
+    const description = values[descriptionIndex] ?? '';
+    const amountValue = values[amountIndex] ?? '';
+    const reference = values[referenceIndex] ?? `Row ${rowIndex + 2}`;
+    const cleanedAmount = amountValue.replace(/[^\d.-]/g, '');
+
+    if (!date || !description || !cleanedAmount || Number.isNaN(Number(cleanedAmount)) || Number(cleanedAmount) <= 0) {
+      return;
+    }
+
+    parsed.push({
+      id: `upload-row-${rowIndex + 1}`,
+      date,
+      description: description || 'Uploaded transaction',
+      reference: reference || `Row ${rowIndex + 2}`,
+      amount: `RM ${Number(cleanedAmount).toFixed(2)}`,
+      account: amountValue.includes('-') ? 'Cash / Bank' : 'Sales / Expense',
+      source: 'BANK_STATEMENT',
+      status: 'Ready',
+    });
+  });
+
+  if (parsed.length === 0) {
+    throw new Error('No valid rows were found in the uploaded CSV file.');
+  }
+
+  return parsed;
+}
 
 export default function UploadPage() {
   const previewContext = getPreviewBusinessContext();
@@ -33,44 +119,24 @@ export default function UploadPage() {
     setParsedRows([]);
   };
 
-  const parseFile = () => {
+  const parseFile = async () => {
     if (!selectedFile) {
       setError('Choose a file before parsing.');
       return;
     }
 
-    const baseName = selectedFile.name.replace(/\.[^.]+$/, '');
-    const rows: UploadItem[] = [
-      {
-        id: 'upload-1',
-        label: `${baseName} - bank transfer`,
-        amount: 'RM 1,250.00',
-        account: 'Maybank Operating',
-        source: 'BANK_STATEMENT',
-        status: 'Ready',
-      },
-      {
-        id: 'upload-2',
-        label: `${baseName} - rent payment`,
-        amount: 'RM 3,000.00',
-        account: 'Rent Expense',
-        source: 'BILL',
-        status: 'Needs review',
-      },
-      {
-        id: 'upload-3',
-        label: `${baseName} - sales receipt`,
-        amount: 'RM 540.00',
-        account: 'Sales Revenue',
-        source: 'RECEIPT',
-        status: 'Ready',
-      },
-    ];
-
-    setParsedRows(rows);
-    setIsParsed(true);
-    setIsImported(false);
-    setError(null);
+    try {
+      const text = await selectedFile.text();
+      const rows = parseUploadedCsvRows(text);
+      setParsedRows(rows);
+      setIsParsed(true);
+      setIsImported(false);
+      setError(null);
+    } catch (fileError) {
+      setParsedRows([]);
+      setIsParsed(false);
+      setError((fileError as Error).message || 'The selected file could not be parsed.');
+    }
   };
 
   const confirmImport = () => {
@@ -162,7 +228,9 @@ export default function UploadPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr>
-                      <th style={{ textAlign: 'left', padding: '0.8rem 0.6rem', borderBottom: '1px solid #e2e8f0' }}>Item</th>
+                      <th style={{ textAlign: 'left', padding: '0.8rem 0.6rem', borderBottom: '1px solid #e2e8f0' }}>Date</th>
+                      <th style={{ textAlign: 'left', padding: '0.8rem 0.6rem', borderBottom: '1px solid #e2e8f0' }}>Description</th>
+                      <th style={{ textAlign: 'left', padding: '0.8rem 0.6rem', borderBottom: '1px solid #e2e8f0' }}>Reference</th>
                       <th style={{ textAlign: 'left', padding: '0.8rem 0.6rem', borderBottom: '1px solid #e2e8f0' }}>Amount</th>
                       <th style={{ textAlign: 'left', padding: '0.8rem 0.6rem', borderBottom: '1px solid #e2e8f0' }}>Account</th>
                       <th style={{ textAlign: 'left', padding: '0.8rem 0.6rem', borderBottom: '1px solid #e2e8f0' }}>Source</th>
@@ -172,14 +240,14 @@ export default function UploadPage() {
                   <tbody>
                     {parsedRows.map((row) => (
                       <tr key={row.id}>
-                        <td style={{ padding: '0.8rem 0.6rem', borderBottom: '1px solid #f1f5f9' }}>{row.label}</td>
+                        <td style={{ padding: '0.8rem 0.6rem', borderBottom: '1px solid #f1f5f9' }}>{row.date}</td>
+                        <td style={{ padding: '0.8rem 0.6rem', borderBottom: '1px solid #f1f5f9' }}>{row.description}</td>
+                        <td style={{ padding: '0.8rem 0.6rem', borderBottom: '1px solid #f1f5f9' }}>{row.reference}</td>
                         <td style={{ padding: '0.8rem 0.6rem', borderBottom: '1px solid #f1f5f9' }}>{row.amount}</td>
                         <td style={{ padding: '0.8rem 0.6rem', borderBottom: '1px solid #f1f5f9' }}>{row.account}</td>
                         <td style={{ padding: '0.8rem 0.6rem', borderBottom: '1px solid #f1f5f9' }}>{row.source}</td>
                         <td style={{ padding: '0.8rem 0.6rem', borderBottom: '1px solid #f1f5f9' }}>
-                          <span style={{ background: row.status === 'Imported' ? '#dcfce7' : row.status === 'Needs review' ? '#fef3c7' : '#dbeafe', color: row.status === 'Imported' ? '#166534' : row.status === 'Needs review' ? '#92400e' : '#1d4ed8', borderRadius: 999, padding: '0.3rem 0.6rem', fontWeight: 700 }}>
-                            {row.status}
-                          </span>
+                          <span style={{ background: row.status === 'Imported' ? '#dcfce7' : row.status === 'Needs review' ? '#fef3c7' : '#eff6ff', color: row.status === 'Imported' ? '#166534' : row.status === 'Needs review' ? '#92400e' : '#1d4ed8', borderRadius: 999, padding: '0.25rem 0.55rem', fontSize: 12, fontWeight: 700 }}>{row.status}</span>
                         </td>
                       </tr>
                     ))}

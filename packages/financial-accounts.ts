@@ -80,6 +80,7 @@ export class FinancialAccountService {
         accountCode: account.accountCode,
         currency: account.currency,
         status: account.status,
+        accountId: account.accountId,
         openingBalance: account.openingBalance,
       });
     }
