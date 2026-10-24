@@ -53,6 +53,13 @@ export async function POST(request: NextRequest) {
     if (result.error || result.data.user?.id !== userId) {
       throw new Error('Session identity mismatch');
     }
+    response.cookies.set('__Host-opsfinance-myops-session', redeemed.session_id, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 12,
+    });
     return response;
   } catch {
     return NextResponse.json({ error: 'Unable to establish OpsFinance session' }, { status: 403, headers });

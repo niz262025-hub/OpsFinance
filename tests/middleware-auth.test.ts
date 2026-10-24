@@ -3,9 +3,10 @@
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createServerClientMock, getUserMock, cookieAdapter } = vi.hoisted(() => ({
+const { createServerClientMock, getUserMock, verifyMyopsSessionMock, cookieAdapter } = vi.hoisted(() => ({
   createServerClientMock: vi.fn(),
   getUserMock: vi.fn(),
+  verifyMyopsSessionMock: vi.fn(),
   cookieAdapter: { current: null as null | { getAll: () => Array<{ name: string; value: string }>; setAll: (cookies: Array<{ name: string; value: string; options?: { path?: string } }>) => void } },
 }));
 
@@ -13,11 +14,16 @@ vi.mock('@supabase/ssr', () => ({
   createServerClient: createServerClientMock,
 }));
 
+vi.mock('../lib/auth/myops-app-client', () => ({
+  verifyMyopsAppSession: verifyMyopsSessionMock,
+}));
+
 import { middleware } from '../middleware';
 
 describe('auth middleware session boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    verifyMyopsSessionMock.mockResolvedValue(false);
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co');
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', 'publishable-test-key');
     cookieAdapter.current = null;
@@ -93,6 +99,68 @@ describe('auth middleware session boundary', () => {
     const response = await middleware(new NextRequest('http://localhost/dashboard'));
 
     expect(response.status).toBe(200);
+  });
+
+  it('requires an active MYOPS app session before allowing a protected page', async () => {
+    vi.stubEnv('MYOPS_SSO_ENABLED', 'true');
+    getUserMock.mockResolvedValue({ data: { user: { id: 'test-user' } } });
+    verifyMyopsSessionMock.mockResolvedValue(true);
+
+    const request = new NextRequest('https://app.myops.com.my/dashboard', {
+      headers: { cookie: '__Host-opsfinance-myops-session=8dcf91a8-15e3-4322-96e8-c195c15ed673' },
+    });
+    const response = await middleware(request);
+
+    expect(response.status).toBe(200);
+    expect(verifyMyopsSessionMock).toHaveBeenCalledWith('8dcf91a8-15e3-4322-96e8-c195c15ed673', true, false);
+  });
+
+  it('denies protected API routes when the MYOPS app session is missing', async () => {
+    vi.stubEnv('MYOPS_SSO_ENABLED', 'true');
+    getUserMock.mockResolvedValue({ data: { user: { id: 'test-user' } } });
+
+    const response = await middleware(new NextRequest('https://app.myops.com.my/api/transactions', { method: 'POST' }));
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('location')).toBeNull();
+    expect(verifyMyopsSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('marks protected data mutations as sensitive MYOPS checks', async () => {
+    vi.stubEnv('MYOPS_SSO_ENABLED', 'true');
+    getUserMock.mockResolvedValue({ data: { user: { id: 'test-user' } } });
+    verifyMyopsSessionMock.mockResolvedValue(true);
+
+    const request = new NextRequest('https://app.myops.com.my/api/transactions', {
+      method: 'POST',
+      headers: { cookie: '__Host-opsfinance-myops-session=8dcf91a8-15e3-4322-96e8-c195c15ed673' },
+    });
+    const response = await middleware(request);
+
+    expect(response.status).toBe(200);
+    expect(verifyMyopsSessionMock).toHaveBeenCalledWith('8dcf91a8-15e3-4322-96e8-c195c15ed673', true, true);
+  });
+
+  it('keeps the ticket redemption endpoint public while MYOPS SSO is required', async () => {
+    vi.stubEnv('MYOPS_SSO_ENABLED', 'true');
+
+    const response = await middleware(new NextRequest('https://app.myops.com.my/api/myops/redeem', { method: 'POST' }));
+
+    expect(response.status).toBe(200);
+    expect(verifyMyopsSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('fails closed to MYOPS SSO in production when the feature flag is missing', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('MYOPS_SSO_ENABLED', '');
+    getUserMock.mockResolvedValue({ data: { user: { id: 'test-user' } } });
+
+    const response = await middleware(new NextRequest('https://app.myops.com.my/dashboard'));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('https://app.myops.com.my/login?reason=myops-session');
+    expect(response.headers.get('set-cookie')).toContain('__Host-opsfinance-myops-session=');
+    expect(verifyMyopsSessionMock).not.toHaveBeenCalled();
   });
 
   it('keeps the root MyOps portal accessible without a user', async () => {
