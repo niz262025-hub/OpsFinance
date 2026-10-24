@@ -12,11 +12,9 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const previewBypassEnabled = isPreviewAuthBypassEnabled();
 
-  if (previewBypassEnabled) {
-    if (pathname === '/' || pathname === '/login' || pathname === '/register' || pathname === '/opsfinance') {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
-
+  // The local bypass is only for the isolated demo-data endpoint. It must never
+  // skip authentication for accounting pages or real API routes.
+  if (previewBypassEnabled && pathname === '/api/preview/data') {
     return response;
   }
 

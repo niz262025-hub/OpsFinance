@@ -51,6 +51,21 @@ describe('auth middleware session boundary', () => {
     expect(opsfinance.headers.get('location')).toBe('http://localhost/login');
   });
 
+  it('limits the explicit local demo bypass to the isolated demo API', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('PREVIEW_AUTH_BYPASS', 'true');
+    vi.stubEnv('VERCEL_ENV', '');
+
+    const demoApi = await middleware(new NextRequest('http://localhost/api/preview/data'));
+    expect(demoApi.status).toBe(200);
+    expect(getUserMock).not.toHaveBeenCalled();
+
+    const dashboard = await middleware(new NextRequest('http://localhost/dashboard'));
+    expect(dashboard.status).toBe(307);
+    expect(dashboard.headers.get('location')).toBe('http://localhost/login');
+    expect(getUserMock).toHaveBeenCalledOnce();
+  });
+
   it('never bypasses Production authentication even when both preview flags are set', async () => {
     vi.stubEnv('VERCEL_ENV', 'production');
     vi.stubEnv('NEXT_PUBLIC_PREVIEW_AUTH_BYPASS', 'true');
