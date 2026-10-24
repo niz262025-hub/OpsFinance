@@ -1,5 +1,8 @@
 import { render, screen } from '@testing-library/react';
+import * as React from 'react';
 import { createElement } from 'react';
+
+// The test JSX transform expects React in scope for the rendered page.
 import { describe, expect, it } from 'vitest';
 import LoginPage from '../app/login/page';
 
