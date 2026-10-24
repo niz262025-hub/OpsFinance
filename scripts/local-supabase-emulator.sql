@@ -1,5 +1,11 @@
 create schema if not exists auth;
 
+-- Minimal Supabase Auth relation needed by the service-managed MYOPS identity-link FK.
+-- The emulator validates migration structure only; it does not model Supabase Auth.
+create table if not exists auth.users (
+  id uuid primary key
+);
+
 create role anon nologin;
 create role authenticated nologin;
 

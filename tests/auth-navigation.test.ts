@@ -14,11 +14,13 @@ describe('auth navigation', () => {
   });
 
   it('requires an explicit opt-in and development runtime for local bypass', () => {
-    vi.stubEnv('VERCEL_ENV', 'development');
+    vi.stubEnv('VERCEL_ENV', '');
     vi.stubEnv('NODE_ENV', 'development');
     vi.stubEnv('NEXT_PUBLIC_PREVIEW_AUTH_BYPASS', 'false');
     expect(isPreviewAuthBypassEnabled()).toBe(false);
     vi.stubEnv('NEXT_PUBLIC_PREVIEW_AUTH_BYPASS', 'true');
+    expect(isPreviewAuthBypassEnabled()).toBe(false);
+    vi.stubEnv('PREVIEW_AUTH_BYPASS', 'true');
     expect(isPreviewAuthBypassEnabled()).toBe(true);
     vi.stubEnv('NODE_ENV', 'production');
     expect(isPreviewAuthBypassEnabled()).toBe(false);
