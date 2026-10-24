@@ -34,12 +34,11 @@ export function clearSupabaseSessionStorage(): void {
 }
 
 export function isPreviewAuthBypassEnabled(): boolean {
-  const envValue = process.env.NEXT_PUBLIC_PREVIEW_AUTH_BYPASS ?? process.env.PREVIEW_AUTH_BYPASS ?? 'false';
-  const vercelEnv = process.env.VERCEL_ENV ?? process.env.NEXT_PUBLIC_VERCEL_ENV ?? '';
-  const isPreviewEnvironment = vercelEnv === 'preview';
-
-  if (vercelEnv === 'production') return false;
-  return envValue === 'true' || isPreviewEnvironment;
+  // Never bypass authentication on a deployed environment, including Vercel previews.
+  // Local demo access requires an explicit server-side opt-in.
+  const deployment = process.env.VERCEL_ENV ?? process.env.NEXT_PUBLIC_VERCEL_ENV;
+  if (deployment || process.env.NODE_ENV !== 'development') return false;
+  return process.env.PREVIEW_AUTH_BYPASS === 'true';
 }
 
 export function navigateToDashboard(assign: (url: string) => void = (url) => window.location.replace(url)): void {
