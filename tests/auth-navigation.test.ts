@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { isPreviewAuthBypassEnabled, navigateToDashboard, navigateToLogin, navigateToMyOpsHome } from '../lib/auth/navigation';
+import { isPreviewAuthBypassAllowedForServer, isPreviewAuthBypassEnabled, navigateToDashboard, navigateToLogin, navigateToMyOpsHome } from '../lib/auth/navigation';
 
 describe('auth navigation', () => {
   it('never bypasses authentication in Vercel preview or production', () => {
@@ -23,6 +23,21 @@ describe('auth navigation', () => {
     vi.stubEnv('NODE_ENV', 'production');
     expect(isPreviewAuthBypassEnabled()).toBe(false);
     vi.unstubAllEnvs();
+  });
+
+  it('server preview demo bypass requires opt-in and never works in production', () => {
+    try {
+      vi.stubEnv('NEXT_PUBLIC_PREVIEW_AUTH_BYPASS', 'true');
+      vi.stubEnv('VERCEL_ENV', 'preview');
+      expect(isPreviewAuthBypassAllowedForServer()).toBe(true);
+      vi.stubEnv('VERCEL_ENV', 'production');
+      expect(isPreviewAuthBypassAllowedForServer()).toBe(false);
+      vi.stubEnv('VERCEL_ENV', 'preview');
+      vi.stubEnv('NEXT_PUBLIC_PREVIEW_AUTH_BYPASS', 'false');
+      expect(isPreviewAuthBypassAllowedForServer()).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('uses a full document navigation to the dashboard', () => {
