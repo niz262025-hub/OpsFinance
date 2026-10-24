@@ -12,11 +12,9 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const previewBypassEnabled = isPreviewAuthBypassAllowedForServer();
 
-  if (previewBypassEnabled) {
-    if (pathname === '/' || pathname === '/login' || pathname === '/register' || pathname === '/opsfinance') {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
-
+  // Preview mode only permits unauthenticated access to the isolated demo API.
+  // All accounting pages and other APIs continue through Supabase authentication.
+  if (previewBypassEnabled && pathname === '/api/preview/data') {
     return response;
   }
 
