@@ -1,0 +1,29 @@
+name: OpsFinance SSO security checks
+
+on:
+  push:
+    branches:
+      - audit/finance-uat-cf3157d
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: SSO security unit tests
+        run: npx vitest run --environment jsdom tests/myops-app-client.test.ts tests/myops-identity.test.ts tests/launch-ticket.test.ts tests/preview-auth-safety.test.ts
+      - name: Production build
+        run: npm run build
