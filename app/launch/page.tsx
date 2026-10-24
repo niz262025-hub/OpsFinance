@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { isLaunchTicketFragment } from '../../lib/auth/launch-ticket';
 
 export default function LaunchPage() {
   const [status, setStatus] = useState('Checking application launch...');
@@ -8,7 +9,7 @@ export default function LaunchPage() {
   useEffect(() => {
     const fragment = window.location.hash;
     window.history.replaceState(null, '', '/launch');
-    const valid = /^#t=[A-Za-z0-9_-]{43}$/.test(fragment);
+    const valid = isLaunchTicketFragment(fragment);
     setStatus(valid
       ? 'Secure launch is not yet available. Please return to MYOPS.'
       : 'Launch request is invalid. Please return to MYOPS.');
