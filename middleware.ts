@@ -4,6 +4,9 @@ import type { NextRequest } from 'next/server';
 
 import { isPreviewAuthBypassEnabled } from './lib/auth/navigation';
 
+const MYOPS_LOGIN_URL = 'https://myops.com.my/login';
+const MYOPS_REGISTER_URL = 'https://myops.com.my/register';
+
 const PROTECTED_PATH_PREFIXES = ['/dashboard', '/accounts', '/transactions', '/upload', '/reconciliation', '/reports', '/settings'];
 
 export async function middleware(request: NextRequest) {
@@ -11,6 +14,10 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const previewBypassEnabled = isPreviewAuthBypassEnabled();
+
+  if (!previewBypassEnabled && (pathname === '/login' || pathname === '/register')) {
+    return NextResponse.redirect(pathname === '/register' ? MYOPS_REGISTER_URL : MYOPS_LOGIN_URL);
+  }
 
   if (previewBypassEnabled) {
     if (pathname === '/' || pathname === '/login' || pathname === '/register' || pathname === '/opsfinance') {
@@ -26,7 +33,7 @@ export async function middleware(request: NextRequest) {
   if (!supabaseUrl || !supabaseKey) {
     const pathname = request.nextUrl.pathname;
     if (PROTECTED_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(MYOPS_LOGIN_URL);
     }
     return response;
   }
@@ -62,7 +69,9 @@ export async function middleware(request: NextRequest) {
     return redirectWithCookies(user ? '/dashboard' : '/login');
   }
   if (isProtectedPath && !user) {
-    return redirectWithCookies('/login');
+    const redirected = NextResponse.redirect(MYOPS_LOGIN_URL);
+    response.cookies.getAll().forEach((cookie) => redirected.cookies.set(cookie));
+    return redirected;
   }
 
   return response;
