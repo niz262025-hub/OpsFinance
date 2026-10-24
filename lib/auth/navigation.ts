@@ -38,7 +38,8 @@ export function isPreviewAuthBypassEnabled(): boolean {
   const vercelEnv = process.env.VERCEL_ENV ?? process.env.NEXT_PUBLIC_VERCEL_ENV ?? '';
   // Preview deployments must not bypass authentication automatically.
   // The bypass is restricted to local development with an explicit opt-in.
-  if (vercelEnv !== 'development' && vercelEnv !== '') return false;
+  if (process.env.NODE_ENV !== 'development') return false;
+  if (vercelEnv && vercelEnv !== 'development') return false;
   return envValue === 'true';
 }
 
