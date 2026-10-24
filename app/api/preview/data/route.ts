@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 
-import { isPreviewAuthBypassEnabled } from '@/lib/auth/navigation';
+import { isPreviewAuthBypassAllowedForServer } from '@/lib/auth/navigation';
 import { getPreviewBusinessContext, getPreviewFinancialSnapshot, getPreviewStore } from '@/lib/preview-data';
 
 export async function GET() {
-  if (!isPreviewAuthBypassEnabled()) {
+  if (!isPreviewAuthBypassAllowedForServer()) {
     return NextResponse.json({ error: 'Preview mode is disabled.' }, { status: 403 });
   }
 

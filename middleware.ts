@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-import { isPreviewAuthBypassEnabled } from './lib/auth/navigation';
+import { isPreviewAuthBypassAllowedForServer } from './lib/auth/navigation';
 
 const PROTECTED_PATH_PREFIXES = ['/dashboard', '/accounts', '/transactions', '/upload', '/reconciliation', '/reports', '/settings'];
 
@@ -10,7 +10,7 @@ export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 
   const pathname = request.nextUrl.pathname;
-  const previewBypassEnabled = isPreviewAuthBypassEnabled();
+  const previewBypassEnabled = isPreviewAuthBypassAllowedForServer();
 
   if (previewBypassEnabled) {
     if (pathname === '/' || pathname === '/login' || pathname === '/register' || pathname === '/opsfinance') {
