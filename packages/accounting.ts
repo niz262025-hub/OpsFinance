@@ -25,6 +25,7 @@ export interface FinancialAccount {
   accountCode: string;
   currency: string;
   status: 'ACTIVE' | 'INACTIVE';
+  accountId?: string | null;
   openingBalance?: string;
 }
 

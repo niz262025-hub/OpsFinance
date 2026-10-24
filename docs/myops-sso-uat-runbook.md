@@ -4,7 +4,7 @@
 1. Deploy this branch to the OpsFinance UAT environment only.
 2. Confirm the MYOPS UAT app service supports signed single-use ticket redemption and points its OpsFinance launch URL to the UAT deployment.
 3. Set server-only `MYOPS_APP_API_ORIGIN`, `MYOPS_APP_ID`, `MYOPS_APP_PRIVATE_KEY` and Supabase URL/anon/service-role keys in the UAT environment. Never put private keys in `NEXT_PUBLIC_*` variables.
-4. Resolve historical Supabase migration ledger gaps before applying migration 013, then link a verified MYOPS `user_ref` to an existing OpsFinance auth user with valid business membership. Do not create links from untrusted browser requests.
+4. Resolve historical Supabase migration ledger gaps before applying migration 014, then link a verified MYOPS `user_ref` to an existing OpsFinance auth user with valid business membership. Do not create links from untrusted browser requests.
 5. Keep `MYOPS_SSO_ENABLED` unset until the preceding prerequisites are confirmed. Enable it only in UAT for the test window.
 
 ## Browser acceptance
