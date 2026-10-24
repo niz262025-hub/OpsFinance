@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   getSupabasePublicConfig,
@@ -10,6 +10,9 @@ import { getMyOpsAccessDecision, validateMyOpsSession } from '../lib/auth/myops'
 import { isPreviewAuthBypassEnabled } from '../lib/auth/navigation';
 
 describe('auth app wiring', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
   it('requires browser auth configuration before creating a client', () => {
     expect(getSupabasePublicConfig({})).toMatchObject({ isConfigured: false });
     expect(getSupabasePublicConfig({
@@ -33,16 +36,17 @@ describe('auth app wiring', () => {
     expect(getMyOpsAccessDecision({ pathname: '/dashboard', user: null })).toMatchObject({ allowed: false, redirectTo: '/' });
   });
 
-  it('enables the preview-only auth bypass only in preview environments', () => {
-    process.env.NEXT_PUBLIC_PREVIEW_AUTH_BYPASS = 'true';
+  it('allows an explicit local-development auth bypass and rejects preview or production environments', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('NEXT_PUBLIC_PREVIEW_AUTH_BYPASS', 'true');
+    vi.stubEnv('VERCEL_ENV', 'development');
     expect(isPreviewAuthBypassEnabled()).toBe(true);
 
-    process.env.NEXT_PUBLIC_PREVIEW_AUTH_BYPASS = 'false';
-    process.env.VERCEL_ENV = 'production';
+    vi.stubEnv('VERCEL_ENV', 'preview');
     expect(isPreviewAuthBypassEnabled()).toBe(false);
 
-    delete process.env.NEXT_PUBLIC_PREVIEW_AUTH_BYPASS;
-    delete process.env.VERCEL_ENV;
+    vi.stubEnv('VERCEL_ENV', 'production');
+    expect(isPreviewAuthBypassEnabled()).toBe(false);
   });
 
   it('rejects expired sessions and client-side bypass attempts before any protected route renders', () => {

@@ -1,12 +1,18 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GET } from '../app/api/preview/data/route';
 import { PREVIEW_BUSINESS_ID } from '../lib/preview-data';
 
 describe('Preview report data API', () => {
   beforeEach(() => {
-    process.env.PREVIEW_AUTH_BYPASS = 'true';
-    process.env.NEXT_PUBLIC_PREVIEW_AUTH_BYPASS = 'true';
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('VERCEL_ENV', 'development');
+    vi.stubEnv('PREVIEW_AUTH_BYPASS', 'true');
+    vi.stubEnv('NEXT_PUBLIC_PREVIEW_AUTH_BYPASS', 'true');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('returns the same posted-journal dataset used by the preview UI reports', async () => {
