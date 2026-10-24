@@ -38,8 +38,10 @@ export function isPreviewAuthBypassEnabled(): boolean {
   const vercelEnv = process.env.VERCEL_ENV ?? process.env.NEXT_PUBLIC_VERCEL_ENV ?? '';
   const isPreviewEnvironment = vercelEnv === 'preview';
 
+  // Never bypass authentication automatically on a preview deployment.
+  // An explicit opt-in is required, and production must always enforce auth.
   if (vercelEnv === 'production') return false;
-  return envValue === 'true' || isPreviewEnvironment;
+  return envValue === 'true' && (isPreviewEnvironment || process.env.NODE_ENV === 'development');
 }
 
 export function navigateToDashboard(assign: (url: string) => void = (url) => window.location.replace(url)): void {
