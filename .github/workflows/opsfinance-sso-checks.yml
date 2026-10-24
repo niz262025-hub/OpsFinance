@@ -23,6 +23,8 @@ jobs:
         run: npm ci
       - name: Typecheck
         run: npm run typecheck
+      - name: Full unit test suite
+        run: npm test
       - name: SSO security unit tests
         run: npx vitest run --environment jsdom tests/myops-app-client.test.ts tests/myops-identity.test.ts tests/launch-ticket.test.ts tests/preview-auth-safety.test.ts
       - name: Production build
