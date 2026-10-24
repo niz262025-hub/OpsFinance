@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { redeemMyopsTicket } from '../../../../lib/auth/myops-app-client';
 import { requireLinkedFinanceAccount } from '../../../../lib/auth/myops-account-preflight';
 import { createLinkedAuthSession } from '../../../../lib/auth/myops-session-issuer';
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { getSupabaseServerConfig } from '../../../../lib/supabase/server';
 
 export const runtime = 'nodejs';
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     const client = createServerClient(url, anonKey, {
       cookies: {
         getAll: () => request.cookies.getAll(),
-        setAll: (items) => {
+        setAll: (items: Array<{ name: string; value: string; options?: CookieOptions }>) => {
           for (const item of items) {
             response.cookies.set(item.name, item.value, { ...item.options, secure: request.nextUrl.protocol === 'https:', path: '/' });
           }
