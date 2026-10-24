@@ -10,7 +10,7 @@ function canonicalJson(value: unknown): string {
 
 export function canonicalMyopsRequest(path: string, appId: string, version: string, timestamp: string, nonce: string, body: Record<string, string>): string {
   const hash = createHash('sha256').update(canonicalJson(body)).digest('hex');
-  return ['POST', path, appId, version, timestamp, nonce, hash].join('\\n');
+  return ['POST', path, appId, version, timestamp, nonce, hash].join('\n');
 }
 
 export async function redeemMyopsTicket(ticket: string): Promise<{ session_id: string; user_ref: string; product: string }> {
