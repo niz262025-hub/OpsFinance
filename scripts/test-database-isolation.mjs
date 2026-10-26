@@ -17,7 +17,16 @@ await assert.rejects(db.exec("insert into idempotency_keys(business_id,idempoten
 await db.exec("select set_config('app.session_user_id','22222222-2222-2222-2222-222222222222',false)");
 assert.equal((await db.query("select get_accounting_idempotency('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','private-b-key') as result")).rows[0].result,'33333333-3333-3333-3333-333333333333');
 assert.equal((await db.query('select * from idempotency_keys')).rows.length,1);
-await db.exec('reset role; set role anon');
+// Reproduce legacy hosted ACLs: anon can have a direct grant independent of PUBLIC.
+await db.exec('reset role; grant execute on function public.get_accounting_idempotency(uuid,text,text) to anon');
+assert.equal((await db.query("select has_function_privilege('anon','public.get_accounting_idempotency(uuid,text,text)','EXECUTE') as allowed")).rows[0].allowed,true);
+const aclMigration=fs.readdirSync(root+'/supabase/migrations').find(file=>file.endsWith('_revoke_legacy_anonymous_idempotency_rpc.sql'));
+assert.ok(aclMigration);
+await db.exec(fs.readFileSync(root+'/supabase/migrations/'+aclMigration,'utf8'));
+await db.exec(fs.readFileSync(root+'/supabase/migrations/'+aclMigration,'utf8'));
+assert.equal((await db.query("select has_function_privilege('anon','public.get_accounting_idempotency(uuid,text,text)','EXECUTE') as allowed")).rows[0].allowed,false);
+assert.equal((await db.query("select has_function_privilege('authenticated','public.get_accounting_idempotency(uuid,text,text)','EXECUTE') as allowed")).rows[0].allowed,true);
+await db.exec('set role anon');
 await assert.rejects(db.query("select public.get_accounting_idempotency('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','private-b-key')"),/permission denied/);
 console.log('PASS: own-business access, cross-business read/write denial, anonymous RPC denial');
 await db.close();
