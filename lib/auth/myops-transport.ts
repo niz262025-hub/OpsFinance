@@ -51,3 +51,34 @@ export async function requestMyops(config: MyopsTransportConfig, endpoint: 'rede
   if (!response.ok) throw new Error('MYOPS access could not be verified.');
   return response.json();
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export interface MyopsGrant {
+  session_id: string;
+  user_ref: string;
+  product: 'opsfinance';
+  idle_seconds: number;
+  max_session_seconds: number;
+}
+
+export async function redeemMyopsTicket(config: MyopsTransportConfig, ticket: string, transport: typeof fetch = fetch): Promise<MyopsGrant> {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(ticket)) throw new Error('Invalid launch ticket.');
+  const result = await requestMyops(config, 'redeem', { ticket }, transport) as Partial<MyopsGrant> | null;
+  if (!result || result.product !== 'opsfinance' || !UUID.test(result.session_id ?? '')
+      || !/^[A-Za-z0-9_-]{43}$/.test(result.user_ref ?? '')
+      || !Number.isInteger(result.idle_seconds) || result.idle_seconds! <= 0 || result.idle_seconds! > 900
+      || !Number.isInteger(result.max_session_seconds) || result.max_session_seconds! <= 0 || result.max_session_seconds! > 43200) {
+    throw new Error('Invalid MYOPS grant.');
+  }
+  return result as MyopsGrant;
+}
+
+// Fresh, server-side check on each protected operation. A failed lookup never grants access.
+export async function checkMyopsEntitlement(config: MyopsTransportConfig, sessionId: string, activity: boolean,
+  transport: typeof fetch = fetch): Promise<void> {
+  if (!UUID.test(sessionId)) throw new Error('Invalid application session.');
+  const result = await requestMyops(config, 'entitlement', {
+    session_id: sessionId, product: 'opsfinance', activity,
+  }, transport) as { entitled?: boolean; session_active?: boolean } | null;
+  if (result?.entitled !== true || result?.session_active !== true) throw new Error('MYOPS access denied.');
+}
