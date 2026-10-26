@@ -84,8 +84,8 @@ export async function redeemMyopsTicket(ticket: string): Promise<MyopsRedeemResu
   if (!TICKET.test(ticket)) throw new Error('Invalid MYOPS launch ticket');
   const value = await signedPost('redeem', { ticket }) as Partial<MyopsRedeemResult>;
   if (!UUID.test(value.session_id ?? '') || !/^[A-Za-z0-9_-]{43}$/.test(value.user_ref ?? '')
-      || value.product !== 'opsfinance' || !Number.isInteger(value.idle_seconds)
-      || !Number.isInteger(value.max_session_seconds) || (value.idle_seconds ?? 0) <= 0
+      || value.product !== 'opsfinance' || !(typeof value.idle_seconds === 'number' && Number.isInteger(value.idle_seconds))
+      || !(typeof value.max_session_seconds === 'number' && Number.isInteger(value.max_session_seconds)) || (value.idle_seconds ?? 0) <= 0
       || (value.max_session_seconds ?? 0) <= 0) {
     throw new Error('Invalid MYOPS redeem response');
   }
