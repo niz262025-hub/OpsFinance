@@ -38,3 +38,11 @@ Status: design and security gate only; NOT enabled in production.
 - [ ] Verify entitlement on all protected endpoints.
 - [ ] Add automated unit/integration/E2E and tenant-isolation tests.
 - [ ] CI green and Production smoke test complete.
+
+## Phase 2 implementation checkpoint (2026-10-27)
+- [x] `/launch` client page reads one-use ticket from URL fragment and clears it before sending the server request.
+- [x] `/api/myops/launch` stub fails closed (HTTP 503, no session cookie, never consumes ticket) until an authorized user-to-Supabase mapping and RLS-safe server session exchange exist.
+- [x] Tests added for fail-closed launch route and basic cross-origin/content-type checks.
+- [ ] Implement verified user_ref identity binding without bypassing RLS.
+- [ ] Implement secure local session exchange and enforce revocation/entitlement across protected pages and APIs.
+- [ ] Run new CI checks and end-to-end staging SSO; no production or login bypass changes approved.
