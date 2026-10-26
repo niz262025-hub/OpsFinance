@@ -2,6 +2,9 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+import { MYOPS_COOKIE, openSession, ssoConfig, ssoEnabled } from './lib/auth/myops-session';
+import { checkMyopsEntitlement } from './lib/auth/myops-transport';
+
 import { isPreviewAuthBypassEnabled } from './lib/auth/navigation';
 
 const PROTECTED_PATH_PREFIXES = ['/dashboard', '/accounts', '/transactions', '/upload', '/reconciliation', '/reports', '/settings'];
@@ -10,6 +13,27 @@ export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 
   const pathname = request.nextUrl.pathname;
+  if (ssoEnabled()) {
+    const protectedPath=PROTECTED_PATH_PREFIXES.some(prefix=>pathname===prefix||pathname.startsWith(`${prefix}/`));
+    const protectedApi=pathname.startsWith('/api/') && !pathname.startsWith('/api/myops/');
+    if (['/login','/register','/auth/callback','/','/opsfinance'].includes(pathname)) {
+      return NextResponse.redirect(new URL('/dashboard',process.env.MYOPS_ORIGIN??'https://www.myops.com.my'));
+    }
+    if(protectedPath||protectedApi) {
+      try {
+        const {secret,transport}=ssoConfig();
+        const session=openSession(request.cookies.get(MYOPS_COOKIE)?.value,secret);
+        if(!session)throw new Error();
+        await checkMyopsEntitlement(transport,session.sessionId,false);
+      }catch{
+        if(protectedApi)return NextResponse.json({error:'MYOPS authentication required.'},{status:401,headers:{'Cache-Control':'no-store'}});
+        return NextResponse.redirect(new URL('/login',process.env.MYOPS_ORIGIN??'https://www.myops.com.my'));
+      }
+    }
+    response.headers.set('Cache-Control','private, no-store');
+    response.headers.set('Referrer-Policy','no-referrer');
+    return response;
+  }
   const previewBypassEnabled = isPreviewAuthBypassEnabled();
 
   if (previewBypassEnabled) {
@@ -69,5 +93,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  runtime: 'nodejs',
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };

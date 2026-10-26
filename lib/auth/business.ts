@@ -122,7 +122,9 @@ export async function resolveCurrentBusinessForUser(
     return { business: null, memberships: [], created: false, error: 'No authorized business found for this user.', context: { userId, businessId: '', state: 'NO_BUSINESS' } };
   }
 
-  const currentBusiness = selectCurrentBusiness(businesses, userId);
+  const currentBusiness = typeof supabase.myopsBusinessId === 'string'
+    ? businesses.find((business: BusinessRecord) => business.id === supabase.myopsBusinessId) ?? null
+    : selectCurrentBusiness(businesses, userId);
   if (!currentBusiness) {
     return { business: null, memberships: businesses, created: false, error: 'No active business is linked to this user.', context: { userId, businessId: '', state: 'NO_BUSINESS' } };
   }

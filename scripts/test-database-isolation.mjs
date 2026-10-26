@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const db=new PGlite({extensions:{pgcrypto}});
 await db.exec(fs.readFileSync(root+'/scripts/local-supabase-emulator.sql','utf8'));
+await db.exec('create role service_role nologin bypassrls; create table auth.users(id uuid primary key)');
 for(const file of fs.readdirSync(root+'/supabase/migrations').sort()) {
  try{await db.exec(fs.readFileSync(root+'/supabase/migrations/'+file,'utf8')); console.log('PASS replay',file)}catch(e){console.log('FAIL replay',file,e.message);process.exit(1)}
 }
@@ -28,5 +29,14 @@ assert.equal((await db.query("select has_function_privilege('anon','public.get_a
 assert.equal((await db.query("select has_function_privilege('authenticated','public.get_accounting_idempotency(uuid,text,text)','EXECUTE') as allowed")).rows[0].allowed,true);
 await db.exec('set role anon');
 await assert.rejects(db.query("select public.get_accounting_idempotency('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','private-b-key')"),/permission denied/);
+await db.exec('reset role');
+await db.exec("insert into auth.users(id) values ('11111111-1111-1111-1111-111111111111')");
+await assert.rejects(db.query("insert into public.myops_identity_links(user_ref,supabase_user_id,business_id) values ($1,'11111111-1111-1111-1111-111111111111','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')",['x'.repeat(43)]),/foreign key/);
+await db.query("insert into public.myops_identity_links(user_ref,supabase_user_id,business_id) values ($1,'11111111-1111-1111-1111-111111111111','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')",['x'.repeat(43)]);
+await db.exec('set role authenticated');
+assert.equal((await db.query('select * from public.myops_identity_links')).rows.length,0);
+await db.exec('reset role; set role service_role');
+assert.equal((await db.query('select enabled from public.myops_identity_links')).rows[0].enabled,false);
+console.log('PASS: identity provisioning requires existing membership; browser roles cannot read mappings');
 console.log('PASS: own-business access, cross-business read/write denial, anonymous RPC denial');
 await db.close();

@@ -1,6 +1,8 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
+import { ssoEnabled } from '../auth/myops-session';
+import { verifiedMyopsClient } from '../auth/myops-server';
 
 export interface BusinessScopeContext {
   businessId: string;
@@ -46,6 +48,7 @@ export function assertBusinessScope(context: BusinessScopeContext): void {
 }
 
 export async function createSupabaseServerClient() {
+  if (ssoEnabled()) return (await verifiedMyopsClient()).client;
   const cookieStore = await cookies();
   const { url, anonKey } = getSupabaseServerConfig();
 

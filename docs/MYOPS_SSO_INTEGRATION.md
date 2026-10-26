@@ -1,6 +1,6 @@
 # MYOPS single-login integration contract (OpsFinance)
 
-Status: design and security gate only; NOT enabled in production.
+Status: staged implementation with automated tests; disabled by default and NOT enabled in production.
 
 ## Required user journey
 1. User authenticates only at MYOPS.
@@ -22,19 +22,67 @@ Status: design and security gate only; NOT enabled in production.
 - Use environment-specific origins and an allowlist for return destinations.
 - Test login, direct dashboard, refresh, unauthorized app, revoked entitlement, logout, expired session, replay, CSRF, and cross-tenant isolation.
 
-## Current implementation blockers confirmed by source audit
-- middleware.ts currently redirects protected routes to local /login.
-- app/login/page.tsx still performs local Supabase password login.
-- app/dashboard/page.tsx requires a Supabase-authenticated user and resolves their business context.
-- No app/launch/page.tsx was found in main.
-- A valid MYOPS app ticket alone does NOT produce a Supabase session. Identity mapping, tenant membership, and RLS need explicit implementation before enabling SSO.
+## Staged implementation
 
-## Acceptance checklist
-- [x] Canonical repository confirmed: niz262025-hub/OpsFinance.
-- [x] Existing local-login dependencies audited.
-- [ ] Implement secure MYOPS ticket exchange and session binding.
-- [ ] Map MYOPS account to Supabase user and authorized business without privilege escalation.
-- [ ] Replace local login redirects with MYOPS login redirect.
-- [ ] Verify entitlement on all protected endpoints.
-- [ ] Add automated unit/integration/E2E and tenant-isolation tests.
-- [ ] CI green and Production smoke test complete.
+The feature is disabled by default. `MYOPS_SSO_ENABLED=true` and
+`NEXT_PUBLIC_MYOPS_SSO_ENABLED=true` must both be configured at build/deployment time.
+The server refuses activation when `VERCEL_ENV=production`.
+
+- `/launch` removes the entire query/fragment before any redemption POST. Only a single
+  43-character ticket fragment field is accepted. React StrictMode cannot redeem twice.
+- `/api/myops/launch` enforces the configured exact HTTPS origin and JSON POST, then
+  signs the server-to-server MYOPS request with Ed25519. No caller identity is accepted.
+- `myops_identity_links` maps an app-scoped opaque `user_ref` to an existing confirmed
+  Supabase auth user and existing business membership. Rows default to disabled.
+  Provisioning is service-role only; RLS and browser-role privilege revocation apply.
+  A composite foreign key prevents linking a user to a business they do not belong to.
+- The server generates and consumes a one-time Supabase proof for that exact mapped
+  account. It verifies returned user ID, confirmed email and RLS-backed membership.
+  No email-based auto-linking, account signup or service-role business-data reads occur.
+- The Supabase user access token stays in an AES-GCM sealed `__Host-opsfinance-sso`
+  cookie with Secure, HttpOnly and SameSite=Lax. Refresh tokens are discarded. The
+  session cannot outlive the user access JWT; expiry requires a new MYOPS launch.
+- Middleware checks the central session before protected pages and legacy APIs.
+  Server-side clients additionally revalidate the mapping, local user and membership.
+- Browser PostgREST requests go through the allowlisted `/api/myops/data/...` proxy,
+  which revalidates central access and uses the mapped user's JWT, preserving RLS.
+  Caller credentials and arbitrary upstream paths cannot choose another identity.
+- App sign-out clears the app cookie and returns to the MYOPS dashboard, where the
+  user can invoke central logout. It does not claim a GET redirect logs out MYOPS.
+  An actual MYOPS logout is enforced on subsequent page/API/data requests.
+
+## Required staging setup
+
+1. Use isolated staging resources with a reviewed backup/recovery plan. Apply the
+   MYOPS entitlement and session proposals only after their separate review.
+2. Apply `20261026171551_myops_identity_links.sql` on OpsFinance staging. Enroll the
+   OpsFinance Ed25519 public key on MYOPS; keep private key and app-session encryption
+   key only in server environment variables. Set exact `MYOPS_ORIGIN` and
+   `OPSFINANCE_ORIGIN` without paths or trailing slashes.
+3. Configure Supabase server URL, public key and service-role key. Insert explicit
+   identity mappings through an authorized administrative workflow; enable only after
+   confirming ownership and membership. Do not accept mapping requests from browsers.
+4. Enable both flags for that staging deployment and rebuild. Use an entitled MYOPS
+   test account to launch, reload, mutate data, revoke entitlement and centrally log out.
+
+Rollback: disable both flags and redeploy; retain the additive mapping table and RLS.
+The migration creates no links and changes no existing user or business records.
+
+## Production release gate
+
+This branch is a staged integration, not production-ready SSO. Existing direct Supabase
+credentials/tokens may still reach the Data API outside the new proxy. Before cutover,
+implement and verify a Data API broker gate (or equivalent database-level enforcement)
+so all business-data access must pass the central authorization check. Do not remove the
+production refusal just by flipping flags. Finish MYOPS production SQL, credential
+registration, full browser E2E, live cross-tenant tests and review before activation.
+
+Storage uploads and Realtime are not proxied by this implementation; fail closed rather
+than exposing user tokens. Extend these paths with dedicated authorization before use.
+
+## Verification scope
+
+Automated tests cover cookie confidentiality/tamper/expiry, CSRF, forged identities,
+fragment clearing, one-time client submission, revoked authorization, mapping/user
+mismatch, missing membership, proxy path/credential restrictions and SQL membership
+provisioning. They do not replace a real end-to-end MYOPS launch in staging.

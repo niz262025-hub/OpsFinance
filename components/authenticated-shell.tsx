@@ -110,6 +110,12 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
   }, [pathname]);
 
   const signOut = async () => {
+    if (process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED === 'true') {
+      const response=await fetch('/api/myops/logout',{method:'POST',credentials:'same-origin'});
+      if(response.ok) { const body=await response.json(); window.location.replace(body.next); }
+      return;
+    }
+
     const supabase = getSupabaseBrowserClient();
     if (supabase) {
       await supabase.auth.signOut();
