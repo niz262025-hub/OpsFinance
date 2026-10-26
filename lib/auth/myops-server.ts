@@ -2,13 +2,14 @@ import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { MYOPS_COOKIE, openSession, ssoConfig, type AppSession } from './myops-session';
 import { checkMyopsEntitlement, redeemMyopsTicket } from './myops-transport';
+import { myopsBrokerHeaders } from './myops-broker';
 
 function clients() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key || !adminKey) throw new Error('SSO identity bridge is not configured.');
-  return { url, key, admin: createClient(url, adminKey, { auth: { persistSession: false, autoRefreshToken: false } }) };
+  return { url, key, admin: createClient(url, adminKey, { auth: { persistSession: false, autoRefreshToken: false },global:{headers:myopsBrokerHeaders()} }) };
 }
 async function mappedIdentity(userRef: string) {
   const { url, key, admin } = clients();
@@ -28,7 +29,7 @@ export async function establishMyopsSession(ticket: string): Promise<AppSession>
   // No email matching, account creation, browser OTP or service-role data client.
   const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type:'magiclink', email:user.email });
   if (linkError || link.user?.id !== user.id || !link.properties?.hashed_token) throw new Error('Identity exchange failed.');
-  const client = createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
+  const client = createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:myopsBrokerHeaders()}});
   const { data, error } = await client.auth.verifyOtp({type:'magiclink',token_hash:link.properties.hashed_token});
   if (error || data.user?.id !== mapping.supabase_user_id || !data.session?.access_token || !data.session.expires_at) throw new Error('Identity exchange failed.');
   const { data: member, error: memberError } = await client.from('business_members').select('business_id')
@@ -45,7 +46,7 @@ export async function verifiedMyopsClient() {
   await checkMyopsEntitlement(config.transport,session.sessionId,true);
   const { url,key,mapping } = await mappedIdentity(session.userRef);
   if (mapping.supabase_user_id !== session.userId || mapping.business_id !== session.businessId) throw new Error('Identity mapping revoked.');
-  const client = createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{Authorization:`Bearer ${session.accessToken}`}}});
+  const client = createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{...myopsBrokerHeaders(),Authorization:`Bearer ${session.accessToken}`}}});
   const { data, error } = await client.auth.getUser(session.accessToken);
   if (error || data.user.id !== session.userId) throw new Error('Local identity is no longer valid.');
   const { data: member,error: memberError } = await client.from('business_members').select('business_id')

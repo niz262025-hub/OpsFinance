@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifiedMyopsClient } from '@/lib/auth/myops-server';
 import { ssoConfig } from '@/lib/auth/myops-session';
+import { myopsBrokerHeaders } from '@/lib/auth/myops-broker';
 export const runtime='nodejs';
 const TABLES=new Set(['users','businesses','business_members','financial_accounts','accounts','transactions','journal_entries','journal_lines','accounting_periods','accounting_rules','bank_statements','bank_transactions','reconciliation_matches','attachments','audit_logs']);
 const RPCS=new Set(['post_accounting_transaction_atomic','get_accounting_idempotency']);
@@ -17,7 +18,7 @@ async function handler(request:NextRequest,context:{params:Promise<{path:string[
     const url=process.env.SUPABASE_URL??process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key=process.env.SUPABASE_ANON_KEY??process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     if(!url||!key) throw new Error();
-    const headers=new Headers({apikey:key,Authorization:`Bearer ${session.accessToken}`});
+    const headers=new Headers({...myopsBrokerHeaders(),apikey:key,Authorization:`Bearer ${session.accessToken}`});
     for(const name of ['accept','content-type','prefer','range','range-unit']) {const value=request.headers.get(name);if(value)headers.set(name,value);}
     const body=['GET','HEAD'].includes(request.method)?undefined:await request.text();
     if(body && Buffer.byteLength(body)>1048576)return NextResponse.json({error:'Request too large.'},{status:413,headers:responseHeaders});

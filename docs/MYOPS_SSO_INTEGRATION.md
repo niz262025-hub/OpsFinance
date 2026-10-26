@@ -86,3 +86,29 @@ Automated tests cover cookie confidentiality/tamper/expiry, CSRF, forged identit
 fragment clearing, one-time client submission, revoked authorization, mapping/user
 mismatch, missing membership, proxy path/credential restrictions and SQL membership
 provisioning. They do not replace a real end-to-end MYOPS launch in staging.
+# Data API broker gate (installed disabled)
+
+Migration `20261026175057_myops_data_api_broker_gate.sql` installs a private,
+disabled configuration singleton, a PostgREST pre-request hook and restrictive
+policies on existing public RLS tables and Storage objects when present. It
+refuses to replace an unrelated pre-request hook. Existing tenant policies still
+decide which rows the authenticated Supabase identity may access.
+
+Provision `MYOPS_DATA_BROKER_KEY` only on the application server (32–256 base64url
+characters). Store only its SHA-256 hex digest in
+`private.myops_broker_config.key_hash`. Enable the singleton only after verifying
+the server sends the header and the staged migration preserves membership RLS.
+The browser never receives this key. Requests with absent or incorrect keys are
+denied, including direct requests using legacy local Supabase tokens. The
+application checks central entitlement before supplying the broker credential.
+
+Activation must be tested against real PostgREST, not only the SQL emulator.
+Direct Realtime/Storage clients do not supply the server key and are denied when
+the gate is active; their server-mediated feature paths still require delivery
+before production. New exposed tables must include this restrictive policy.
+Production SSO remains disabled until full runtime verification is complete.
+
+Rollback (operator SQL): `update private.myops_broker_config set enabled=false where id=true;`
+This restores prior tenant-policy behavior without deleting data or identity
+mappings. Never log the plaintext broker credential or insert it into a migration.
+

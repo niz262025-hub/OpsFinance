@@ -14,13 +14,16 @@ afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();});
 const context=(path=['rest','v1','accounts'])=>({params:Promise.resolve({path})});
 describe('server-mediated SSO data access',()=>{
  it('uses the RLS user JWT and never forwards caller credentials',async()=>{
-  const response=await GET(new NextRequest('https://finance.example/api/myops/data/rest/v1/accounts?select=id',{headers:{Authorization:'Bearer attacker'}}),context());
+  vi.stubEnv('MYOPS_DATA_BROKER_KEY','b'.repeat(48));
+  const response=await GET(new NextRequest('https://finance.example/api/myops/data/rest/v1/accounts?select=id',{headers:{Authorization:'Bearer attacker','x-myops-broker-key':'caller-controlled'}}),context());
   expect(response.status).toBe(200);expect(verified).toHaveBeenCalledOnce();
   const [url,options]=vi.mocked(fetch).mock.calls[0];
   expect(url).toBe('https://database.example/rest/v1/accounts?select=id');
   expect(new Headers(options?.headers).get('authorization')).toBe('Bearer verified-user-jwt');
+  expect(new Headers(options?.headers).get('x-myops-broker-key')).toBe('b'.repeat(48));
   expect(options).toMatchObject({redirect:'error',cache:'no-store'});
   expect(await response.text()).not.toContain('verified-user-jwt');
+  expect(response.headers.get('x-myops-broker-key')).toBeNull();
  });
  it('denies revoked sessions without contacting the data API',async()=>{
   verified.mockRejectedValue(new Error('revoked'));
