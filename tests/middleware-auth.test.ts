@@ -39,9 +39,10 @@ describe('auth middleware session boundary', () => {
     expect(response.headers.get('location')).toBe('http://localhost/login');
   });
 
-  it('forces preview-only bypass to dashboard without requiring a separate OpsFinance login', async () => {
+  it('allows explicitly opted-in local development dashboard previews', async () => {
     vi.stubEnv('NEXT_PUBLIC_PREVIEW_AUTH_BYPASS', 'true');
-    vi.stubEnv('VERCEL_ENV', 'preview');
+    vi.stubEnv('VERCEL_ENV', 'development');
+    vi.stubEnv('NODE_ENV', 'development');
 
     const root = await middleware(new NextRequest('http://localhost/'));
     const login = await middleware(new NextRequest('http://localhost/login'));
