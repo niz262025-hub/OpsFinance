@@ -15,7 +15,11 @@ async function mappedIdentity(userRef: string) {
   const { url, key, admin } = clients();
   const { data: mapping, error } = await admin.from('myops_identity_links')
     .select('supabase_user_id,business_id').eq('user_ref', userRef).eq('enabled',true).maybeSingle();
-  if (error || !mapping) throw new Error('No authorized identity mapping.');
+  if (error || !mapping) {
+    if (process.env.VERCEL_ENV === 'preview') console.warn('myops_identity_lookup_unavailable',
+      error?.message === 'Invalid API key' ? 'invalid_api_key' : error?.code === '42501' ? 'database_access_denied' : error ? 'upstream' : 'mapping_missing');
+    throw new Error('No authorized identity mapping.');
+  }
   return { url, key, admin, mapping };
 }
 export async function establishMyopsSession(ticket: string): Promise<AppSession> {
