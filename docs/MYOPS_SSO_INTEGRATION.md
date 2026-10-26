@@ -88,6 +88,13 @@ mismatch, missing membership, proxy path/credential restrictions and SQL members
 provisioning. They do not replace a real end-to-end MYOPS launch in staging.
 # Data API broker gate (installed disabled)
 
+Protected staging previews can use owner-approved temporary Vercel share access
+through server-only `MYOPS_STAGING_SHARE_TOKEN`. It is sent only from Vercel
+preview to the exact configured `MYOPS_ORIGIN`, never to production or through a
+redirect. It expires with the share link and must not be logged or committed.
+This grants access through Vercel protection only: MYOPS still validates the
+signed application request, ticket, audience, expiry, replay and entitlement.
+
 Migration `20261026175057_myops_data_api_broker_gate.sql` installs a private,
 disabled configuration singleton, a PostgREST pre-request hook and restrictive
 policies on existing public RLS tables and Storage objects when present. It

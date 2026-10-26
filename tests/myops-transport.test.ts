@@ -1,13 +1,24 @@
 // @vitest-environment node
 import { generateKeyPairSync, createHash, verify } from 'node:crypto';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canonicalJson, checkMyopsEntitlement, redeemMyopsTicket, requestMyops, signMyopsRequest } from '../lib/auth/myops-transport';
 
 const pair = generateKeyPairSync('ed25519');
 const config = { origin: 'https://myops.example', appId: 'opsfinance', keyVersion: 'current' as const,
   privateKey: pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString() };
+afterEach(()=>vi.unstubAllEnvs());
 
 describe('MYOPS signed server transport', () => {
+  it('limits temporary preview access to the configured portal and refuses production forwarding',async()=>{
+    const transport=vi.fn().mockResolvedValue({ok:true,json:async()=>({})});
+    vi.stubEnv('MYOPS_STAGING_SHARE_TOKEN','s'.repeat(32));vi.stubEnv('MYOPS_ORIGIN',config.origin);vi.stubEnv('VERCEL_ENV','preview');
+    await requestMyops(config,'redeem',{},transport);
+    expect(new URL(transport.mock.calls.at(-1)![0]).searchParams.get('_vercel_share')).toBe('s'.repeat(32));
+    vi.stubEnv('VERCEL_ENV','production');await requestMyops(config,'redeem',{},transport);
+    expect(new URL(transport.mock.calls.at(-1)![0]).search).toBe('');
+    vi.stubEnv('VERCEL_ENV','preview');vi.stubEnv('MYOPS_ORIGIN','https://other.example');await requestMyops(config,'redeem',{},transport);
+    expect(new URL(transport.mock.calls.at(-1)![0]).search).toBe('');
+  });
   it('matches the MYOPS canonical request and verifies with the registered public key', () => {
     const body = { ticket: 'a'.repeat(43) };
     const result = signMyopsRequest(config, 'redeem', body, '1793000000000', 'n'.repeat(32));

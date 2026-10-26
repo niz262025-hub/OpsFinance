@@ -45,7 +45,15 @@ export function signMyopsRequest(config: MyopsTransportConfig, endpoint: 'redeem
 export async function requestMyops(config: MyopsTransportConfig, endpoint: 'redeem' | 'entitlement', body: unknown,
   transport: typeof fetch = fetch): Promise<unknown> {
   const request = signMyopsRequest(config, endpoint, body);
-  const response = await transport(request.url, { method: 'POST', headers: request.headers, body: request.body,
+  const url = new URL(request.url);
+  // Owner-approved, expiring preview access only. Never send the bearer to another
+  // origin or production, and never follow redirects carrying it.
+  const previewShare = process.env.MYOPS_STAGING_SHARE_TOKEN;
+  if (process.env.VERCEL_ENV === 'preview' && previewShare && config.origin === process.env.MYOPS_ORIGIN) {
+    if (!/^[A-Za-z0-9_-]{16,256}$/.test(previewShare)) throw new Error('Invalid staging access configuration.');
+    url.searchParams.set('_vercel_share', previewShare);
+  }
+  const response = await transport(url.href, { method: 'POST', headers: request.headers, body: request.body,
     cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(8000) });
   // Do not propagate upstream errors, credentials, tickets or response bodies into logs/UI.
   if (!response.ok) throw new Error('MYOPS access could not be verified.');
