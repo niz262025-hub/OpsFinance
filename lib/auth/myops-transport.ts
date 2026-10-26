@@ -53,10 +53,20 @@ export async function requestMyops(config: MyopsTransportConfig, endpoint: 'rede
     if (!/^[A-Za-z0-9_-]{16,256}$/.test(previewShare)) throw new Error('Invalid staging access configuration.');
     url.searchParams.set('_vercel_share', previewShare);
   }
-  const response = await transport(url.href, { method: 'POST', headers: request.headers, body: request.body,
-    cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(8000) });
+  let response: Response;
+  try {
+    response = await transport(url.href, { method: 'POST', headers: request.headers, body: request.body,
+      cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(20000) });
+  } catch (error) {
+    if (process.env.VERCEL_ENV === 'preview') console.warn('myops_preview_transport_failed',
+      error instanceof Error && ['TimeoutError','AbortError','TypeError'].includes(error.name) ? error.name : 'network');
+    throw new Error('MYOPS access could not be verified.');
+  }
   // Do not propagate upstream errors, credentials, tickets or response bodies into logs/UI.
-  if (!response.ok) throw new Error('MYOPS access could not be verified.');
+  if (!response.ok) {
+    if (process.env.VERCEL_ENV === 'preview') console.warn('myops_preview_transport_failed','http',response.status);
+    throw new Error('MYOPS access could not be verified.');
+  }
   return response.json();
 }
 
