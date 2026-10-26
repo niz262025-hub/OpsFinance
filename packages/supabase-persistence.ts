@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import type { AccountingPeriod, BusinessAccount, FinancialAccount, JournalEntry, JournalLine } from './accounting';
+import { DecimalMoney, type AccountingPeriod, type BusinessAccount, type FinancialAccount, type JournalEntry, type JournalLine } from './accounting';
 import type { TransactionRecord } from './transactions';
 import type { Business, BusinessMember } from './types';
 
@@ -505,7 +505,50 @@ export class SupabaseJournalRepository extends SupabaseRepositoryAdapter<Journal
     super('journal_entries', client, 'business_id');
   }
 
+  private validateJournalPayload(input: JournalEntry & { lines: JournalLine[] }): void {
+    if (!input.businessId || !input.businessId.trim()) {
+      throw new Error('Journal business is required.');
+    }
+
+    if (!input.journalDate || Number.isNaN(new Date(input.journalDate).getTime())) {
+      throw new Error('Journal date is required and must be valid.');
+    }
+
+    if (!input.lines || input.lines.length < 2) {
+      throw new Error('A journal must contain at least two valid lines.');
+    }
+
+    let totalDebit = DecimalMoney.zero();
+    let totalCredit = DecimalMoney.zero();
+
+    for (const [index, line] of input.lines.entries()) {
+      if (!line.accountId || !String(line.accountId).trim()) {
+        throw new Error(`Line ${index + 1} is missing an account.`);
+      }
+
+      const debit = new DecimalMoney(line.debit ?? '0.00');
+      const credit = new DecimalMoney(line.credit ?? '0.00');
+
+      if (debit.isPositive() && credit.isPositive()) {
+        throw new Error(`Line ${index + 1} cannot have debit and credit simultaneously.`);
+      }
+      if (!debit.isPositive() && !credit.isPositive()) {
+        throw new Error(`Line ${index + 1} must contain a positive debit or credit value.`);
+      }
+
+      totalDebit = totalDebit.add(debit);
+      totalCredit = totalCredit.add(credit);
+    }
+
+    if (totalDebit.compare(totalCredit) !== 0) {
+      throw new Error(`Journal is unbalanced: debit ${totalDebit.toString()} does not equal credit ${totalCredit.toString()}.`);
+    }
+  }
+
   async createPosted(input: JournalEntry & { lines: JournalLine[] }): Promise<JournalEntry> {
+    const scope = sanitizeBusinessId(input.businessId);
+    this.validateJournalPayload(input);
+
     const initialEntry = {
       id: input.id,
       business_id: input.businessId,
@@ -520,9 +563,13 @@ export class SupabaseJournalRepository extends SupabaseRepositoryAdapter<Journal
       created_at: input.createdAt,
     };
 
-    const entryResult = await (this['client'] as any).from('journal_entries').upsert(initialEntry, { onConflict: 'id' }).select().single();
+    const entryResult = await (this['client'] as any).from('journal_entries').insert(initialEntry).select().single();
     if (entryResult.error) {
       throw new Error(entryResult.error.message ?? 'Supabase journal insert failed.');
+    }
+
+    if (!entryResult.data || entryResult.data.business_id !== scope) {
+      throw new Error('Business access denied.');
     }
 
     const linesPayload = input.lines.map((line: JournalLine) => ({
@@ -536,7 +583,7 @@ export class SupabaseJournalRepository extends SupabaseRepositoryAdapter<Journal
       contact_id: line.contactId ?? null,
     }));
 
-    const lineResult = await (this['client'] as any).from('journal_lines').upsert(linesPayload, { onConflict: 'id' }).select();
+    const lineResult = await (this['client'] as any).from('journal_lines').insert(linesPayload).select();
     if (lineResult.error) {
       throw new Error(lineResult.error.message ?? 'Supabase journal line insert failed.');
     }
@@ -549,6 +596,7 @@ export class SupabaseJournalRepository extends SupabaseRepositoryAdapter<Journal
         posted_by: null,
       })
       .eq('id', input.id)
+      .eq('business_id', scope)
       .select()
       .single();
 
@@ -586,8 +634,8 @@ export class SupabaseJournalRepository extends SupabaseRepositoryAdapter<Journal
     }
 
     const rows = (result.data ?? []) as any[];
-    const totalDebit = rows.reduce((sum, row) => sum + Number(row.debit ?? 0), 0).toFixed(2);
-    const totalCredit = rows.reduce((sum, row) => sum + Number(row.credit ?? 0), 0).toFixed(2);
+    const totalDebit = rows.reduce((sum, row) => sum.add(new DecimalMoney(row.debit ?? '0.00')), DecimalMoney.zero()).toString();
+    const totalCredit = rows.reduce((sum, row) => sum.add(new DecimalMoney(row.credit ?? '0.00')), DecimalMoney.zero()).toString();
 
     return { totalDebit, totalCredit, rows };
   }

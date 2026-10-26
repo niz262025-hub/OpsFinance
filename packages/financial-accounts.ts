@@ -1,4 +1,4 @@
-import { AccountingEngine, createOpeningBalanceJournal, type BusinessAccount, type FinancialAccount, type FinancialAccountType } from './accounting';
+import { AccountingEngine, DecimalMoney, createOpeningBalanceJournal, type BusinessAccount, type FinancialAccount, type FinancialAccountType } from './accounting';
 
 export type FinancialAccountStatus = 'ACTIVE' | 'INACTIVE';
 
@@ -80,6 +80,7 @@ export class FinancialAccountService {
         accountCode: account.accountCode,
         currency: account.currency,
         status: account.status,
+        accountId: account.accountId,
         openingBalance: account.openingBalance,
       });
     }
@@ -159,8 +160,8 @@ export class FinancialAccountService {
 
     this.registerFinancialAccount(account);
 
-    const openingBalance = Number(input.openingBalance ?? '0.00');
-    if (openingBalance !== 0) {
+    const openingBalance = new DecimalMoney(input.openingBalance ?? '0.00');
+    if (!openingBalance.isZero()) {
       const openingJournal = this.engine.createJournal(createOpeningBalanceJournal({
         businessId: input.businessId,
         journalDate: account.openingBalanceDate ?? now.slice(0, 10),

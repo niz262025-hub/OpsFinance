@@ -6,7 +6,7 @@ describe('tenant write boundaries', () => {
     const from = vi.fn();
     const repo = new SupabaseRepositoryAdapter<any>('accounts', { from });
     await expect(repo.update('record-1', { name: 'changed' })).rejects.toThrow('Business access denied');
-    expect(from).toHaveBeenCalledTimes(1);
+    expect(from).not.toHaveBeenCalled();
   });
 
   it('blocks ownership and record id changes', async () => {
@@ -41,5 +41,47 @@ describe('tenant write boundaries', () => {
     await repo.create({ id: 'tx-1', businessId: 'business-a', date: '2026-10-19', type: 'MONEY_IN', amount: '10.00', description: 'test' } as any);
     expect(insert).toHaveBeenCalledTimes(1);
     expect(upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('journal insert identity protection', () => {
+  it('rejects an empty journal business before any database operation', async () => {
+    const { SupabaseJournalRepository } = await import('../packages/supabase-persistence');
+    const from = vi.fn();
+    const repo = new SupabaseJournalRepository({ from });
+    await expect(repo.createPosted({ businessId: '', lines: [] } as any)).rejects.toThrow('Business access denied');
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('does not overwrite an existing journal or insert lines when the journal insert fails', async () => {
+    const { SupabaseJournalRepository } = await import('../packages/supabase-persistence');
+    const insert = vi.fn(() => ({ select: () => ({ single: async () => ({ data: null, error: { message: 'duplicate key' } }) }) }));
+    const upsert = vi.fn();
+    const from = vi.fn(() => ({ insert, upsert }));
+    const repo = new SupabaseJournalRepository({ from });
+    await expect(repo.createPosted({ id: 'existing', businessId: 'business-a', journalDate: '2026-10-26', lines: [{ accountId: 'cash', debit: '10.00' }, { accountId: 'sales', credit: '10.00' }] } as any)).rejects.toThrow('duplicate key');
+    expect(upsert).not.toHaveBeenCalled();
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(from).toHaveBeenCalledWith('journal_entries');
+  });
+});
+
+
+describe('transaction create rejection', () => {
+  const transaction = { id: 'existing', businessId: 'business-a', date: '2026-10-26', type: 'MONEY_IN', amount: '10.00', description: 'test' } as any;
+  it('rejects missing scope before any request', async () => {
+    const from = vi.fn();
+    await expect(new SupabaseTransactionRepository({ from }).create({ ...transaction, businessId: '' })).rejects.toThrow('Business access denied');
+    expect(from).not.toHaveBeenCalled();
+  });
+  it('propagates duplicate rejection instead of overwriting an existing transaction', async () => {
+    const upsert = vi.fn();
+    const repo = new SupabaseTransactionRepository({ from: () => ({ upsert, insert: () => ({ select: () => ({ single: async () => ({ data: null, error: { message: 'duplicate key' } }) }) }) }) });
+    await expect(repo.create(transaction)).rejects.toThrow('duplicate key');
+    expect(upsert).not.toHaveBeenCalled();
+  });
+  it('rejects an unexpected tenant in the database response', async () => {
+    const repo = new SupabaseTransactionRepository({ from: () => ({ insert: () => ({ select: () => ({ single: async () => ({ data: { business_id: 'business-b' }, error: null }) }) }) }) });
+    await expect(repo.create(transaction)).rejects.toThrow('Business access denied');
   });
 });
