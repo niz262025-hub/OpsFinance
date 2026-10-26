@@ -10,14 +10,26 @@ afterEach(()=>vi.unstubAllEnvs());
 
 describe('MYOPS signed server transport', () => {
   it('limits temporary preview access to the configured portal and refuses production forwarding',async()=>{
-    const transport=vi.fn().mockResolvedValue({ok:true,json:async()=>({})});
+    const transport=vi.fn().mockImplementation(async(_url,init)=>init.method==='GET'
+      ? new Response(null,{status:307,headers:{location:config.origin+'/api/app/redeem','Set-Cookie':'_vercel_jwt=preview-auth; HttpOnly; Secure'}})
+      : {ok:true,json:async()=>({})});
     vi.stubEnv('MYOPS_STAGING_SHARE_TOKEN','s'.repeat(32));vi.stubEnv('MYOPS_ORIGIN',config.origin);vi.stubEnv('VERCEL_ENV','preview');
     await requestMyops(config,'redeem',{},transport);
-    expect(new URL(transport.mock.calls.at(-1)![0]).searchParams.get('_vercel_share')).toBe('s'.repeat(32));
+    expect(new URL(transport.mock.calls[0][0]).searchParams.get('_vercel_share')).toBe('s'.repeat(32));
+    expect(transport.mock.calls[0][1]).toMatchObject({method:'GET',redirect:'manual'});
+    expect(transport.mock.calls[0][1].body).toBeUndefined();
+    expect(new Headers(transport.mock.calls.at(-1)![1].headers).get('cookie')).toBe('_vercel_jwt=preview-auth');
     vi.stubEnv('VERCEL_ENV','production');await requestMyops(config,'redeem',{},transport);
     expect(new URL(transport.mock.calls.at(-1)![0]).search).toBe('');
+    expect(new Headers(transport.mock.calls.at(-1)![1].headers).get('cookie')).toBeNull();
     vi.stubEnv('VERCEL_ENV','preview');vi.stubEnv('MYOPS_ORIGIN','https://other.example');await requestMyops(config,'redeem',{},transport);
     expect(new URL(transport.mock.calls.at(-1)![0]).search).toBe('');
+  });
+  it('does not follow an external preview bootstrap redirect or send a ticket to it',async()=>{
+    vi.stubEnv('MYOPS_STAGING_SHARE_TOKEN','s'.repeat(32));vi.stubEnv('MYOPS_ORIGIN',config.origin);vi.stubEnv('VERCEL_ENV','preview');
+    const transport=vi.fn().mockResolvedValue(new Response(null,{status:307,headers:{location:'https://attacker.example/','Set-Cookie':'_vercel_jwt=preview-auth'}}));
+    await expect(requestMyops(config,'redeem',{ticket:'t'.repeat(43)},transport)).rejects.toThrow('MYOPS access could not be verified.');
+    expect(transport).toHaveBeenCalledTimes(1);expect(transport.mock.calls[0][1].body).toBeUndefined();
   });
   it('matches the MYOPS canonical request and verifies with the registered public key', () => {
     const body = { ticket: 'a'.repeat(43) };
