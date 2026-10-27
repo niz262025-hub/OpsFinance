@@ -1,4 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 
 export type SupabaseBrowserClient = ReturnType<typeof createBrowserClient>;
 
@@ -26,11 +27,24 @@ export function getSupabaseBrowserClient(): SupabaseBrowserClient | null {
   }
 
   if (!browserClient) {
-    browserClient = createBrowserClient(url, publishableKey, {
-      global: {
-        fetch,
-      },
-    });
+    if (process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED === 'true') {
+      // The SSR browser factory forces persistent cookie storage and refresh on.
+      // Use a stateless data-only client in SSO mode instead.
+      browserClient = createClient(url, publishableKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+        global: {
+          fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+            const target = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+            if (target.origin !== new URL(url).origin || !target.pathname.startsWith('/rest/v1/')) {
+              throw new Error('Unsupported SSO data operation.');
+            }
+            return fetch(`/api/myops/data${target.pathname}${target.search}`, { ...init, credentials: 'same-origin' });
+          },
+        },
+      });
+    } else {
+      browserClient = createBrowserClient(url, publishableKey, { global: { fetch } });
+    }
   }
 
   return browserClient;

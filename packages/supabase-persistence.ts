@@ -105,12 +105,23 @@ export class SupabaseRepositoryAdapter<T extends BusinessScopedRecord> {
     return (result.data?.[0] ?? input) as T;
   }
 
-  async update(id: string, patch: Partial<T>): Promise<T> {
-    const result = await (this.client.from(this.tableName) as any).update(patch).eq('id', id).select();
+  async update(id: string, patch: Partial<T>, businessId?: string): Promise<T> {
+    if ('id' in patch || 'business_id' in patch || 'businessId' in patch) {
+      throw new Error('Record identity and ownership cannot be changed.');
+    }
+    const scope = this.businessKey === 'business_id' ? sanitizeBusinessId(businessId) : null;
+    let query = (this.client.from(this.tableName) as any).update(patch).eq('id', id);
+    if (scope) {
+      query = query.eq('business_id', scope);
+    }
+    const result = await query.select();
     if (result.error) {
       throw new Error(result.error.message ?? 'Supabase repository update failed.');
     }
-    return (result.data?.[0] ?? ({ ...patch, id } as T)) as T;
+    if (!result.data?.[0]) {
+      throw new Error('Record not found for this business.');
+    }
+    return result.data[0] as T;
   }
 }
 
@@ -477,9 +488,13 @@ export class SupabaseTransactionRepository extends SupabaseRepositoryAdapter<Tra
       updated_at: input.updatedAt ?? new Date().toISOString(),
     };
 
-    const result = await (this['client'] as any).from('transactions').upsert(payload, { onConflict: 'id' }).select().single();
+    sanitizeBusinessId(input.businessId);
+    const result = await (this['client'] as any).from('transactions').insert(payload).select().single();
     if (result.error) {
       throw new Error(result.error.message ?? 'Supabase transaction insert failed.');
+    }
+    if (!result.data || result.data.business_id !== input.businessId) {
+      throw new Error('Business access denied.');
     }
     return result.data as TransactionRecord;
   }
@@ -531,6 +546,7 @@ export class SupabaseJournalRepository extends SupabaseRepositoryAdapter<Journal
   }
 
   async createPosted(input: JournalEntry & { lines: JournalLine[] }): Promise<JournalEntry> {
+    const scope = sanitizeBusinessId(input.businessId);
     this.validateJournalPayload(input);
 
     const initialEntry = {
@@ -547,9 +563,13 @@ export class SupabaseJournalRepository extends SupabaseRepositoryAdapter<Journal
       created_at: input.createdAt,
     };
 
-    const entryResult = await (this['client'] as any).from('journal_entries').upsert(initialEntry, { onConflict: 'id' }).select().single();
+    const entryResult = await (this['client'] as any).from('journal_entries').insert(initialEntry).select().single();
     if (entryResult.error) {
       throw new Error(entryResult.error.message ?? 'Supabase journal insert failed.');
+    }
+
+    if (!entryResult.data || entryResult.data.business_id !== scope) {
+      throw new Error('Business access denied.');
     }
 
     const linesPayload = input.lines.map((line: JournalLine) => ({
@@ -563,7 +583,7 @@ export class SupabaseJournalRepository extends SupabaseRepositoryAdapter<Journal
       contact_id: line.contactId ?? null,
     }));
 
-    const lineResult = await (this['client'] as any).from('journal_lines').upsert(linesPayload, { onConflict: 'id' }).select();
+    const lineResult = await (this['client'] as any).from('journal_lines').insert(linesPayload).select();
     if (lineResult.error) {
       throw new Error(lineResult.error.message ?? 'Supabase journal line insert failed.');
     }
@@ -576,6 +596,7 @@ export class SupabaseJournalRepository extends SupabaseRepositoryAdapter<Journal
         posted_by: null,
       })
       .eq('id', input.id)
+      .eq('business_id', scope)
       .select()
       .single();
 
@@ -649,67 +670,22 @@ export class SupabaseAccountingPeriodRepository extends SupabaseRepositoryAdapte
 export class SupabaseIdempotencyRepository {
   constructor(private readonly client: SupabaseClientLike) {}
 
-  async get(businessId: string, idempotencyKey: string, operationType = 'ACCOUNTING_POST'): Promise<{ resultId?: string } | null> {
-    const scope = sanitizeBusinessId(businessId);
-    const trimmedKey = String(idempotencyKey ?? '').trim();
-    if (!trimmedKey) {
-      return null;
-    }
-
-    const result = await (this.client.from('idempotency_keys') as any)
-      .select('result_id')
-      .eq('business_id', scope)
-      .eq('idempotency_key', trimmedKey)
-      .eq('operation_type', operationType)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (result.error) {
-      throw new Error(result.error.message ?? 'Supabase idempotency lookup failed.');
-    }
-
-    if (!result.data) {
-      return null;
-    }
-
-    return { resultId: result.data.result_id ?? undefined };
+  async get(_businessId: string, _idempotencyKey: string, _operationType = 'ACCOUNTING_POST'): Promise<{ resultId?: string } | null> {
+    throw new Error(
+      'Direct idempotency lookup is disabled. Use the authenticated atomic posting RPC or the backend-owned security definer path only.',
+    );
   }
 
   async reserve(
-    businessId: string,
-    idempotencyKey: string,
-    resultId: string,
-    operationType = 'ACCOUNTING_POST',
-    resultType = 'TRANSACTION',
+    _businessId: string,
+    _idempotencyKey: string,
+    _resultId: string,
+    _operationType = 'ACCOUNTING_POST',
+    _resultType = 'TRANSACTION',
   ): Promise<{ resultId: string; idempotent: boolean }> {
-    const scope = sanitizeBusinessId(businessId);
-    const trimmedKey = String(idempotencyKey ?? '').trim();
-    if (!trimmedKey) {
-      throw new Error('Idempotency key is required.');
-    }
-
-    const existing = await this.get(scope, trimmedKey, operationType);
-    if (existing?.resultId) {
-      return { resultId: existing.resultId, idempotent: true };
-    }
-
-    const insert = await (this.client.from('idempotency_keys') as any)
-      .insert({
-        business_id: scope,
-        idempotency_key: trimmedKey,
-        operation_type: operationType,
-        result_type: resultType,
-        result_id: resultId,
-      })
-      .select()
-      .single();
-
-    if (insert.error) {
-      throw new Error(insert.error.message ?? 'Supabase idempotency registration failed.');
-    }
-
-    return { resultId, idempotent: false };
+    throw new Error(
+      'Direct idempotency reservation is disabled. Use the authenticated atomic posting RPC or the backend-owned security definer path only.',
+    );
   }
 }
 
