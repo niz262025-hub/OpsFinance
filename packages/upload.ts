@@ -1,7 +1,7 @@
 import { AccountingEngine, DecimalMoney } from './accounting';
 import type { AccountingRuleService } from './accounting-rules';
+import { buildBusinessDuplicateKey, createDeterministicHash, isAllowedImportTransition, parseCsvRow, validateCsvBankStatement } from './csv-import';
 import { TransactionService, type TransactionRecord } from './transactions';
-import type { SubscriptionService } from './subscriptions';
 
 export type UploadType = 'BANK_STATEMENT' | 'PDF' | 'CSV' | 'EXCEL' | 'RECEIPT' | 'INVOICE' | 'BILL';
 export type ExtractionStatus = 'IMPORTED' | 'PARSED' | 'REVIEW' | 'MAPPED' | 'APPROVED' | 'POSTED' | 'RECONCILED';
@@ -113,9 +113,9 @@ export class UploadConvertService {
   private readonly accountingRules?: AccountingRuleService;
   private readonly ruleUserId: string;
 
-  constructor(engine: AccountingEngine, options: { accountingRules?: AccountingRuleService; ruleUserId?: string; subscriptionService?: SubscriptionService } = {}) {
+  constructor(engine: AccountingEngine, options: { accountingRules?: AccountingRuleService; ruleUserId?: string } = {}) {
     this.engine = engine;
-    this.transactionService = new TransactionService(engine, { subscriptionService: options.subscriptionService });
+    this.transactionService = new TransactionService(engine);
     this.accountingRules = options.accountingRules;
     this.ruleUserId = options.ruleUserId ?? 'system';
   }
@@ -128,7 +128,7 @@ export class UploadConvertService {
     }
 
     const fileHash = this.generateFileHash(file.content ?? `${file.name}:${file.size}:${file.type}`);
-    const duplicateReference = this.hashIndex.get(`${businessId}:${fileHash}`) ?? null;
+    const duplicateReference = this.hashIndex.get(buildBusinessDuplicateKey(businessId, fileHash)) ?? null;
     const id = `upload-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
     const record: UploadRecord = {
       id,
@@ -152,7 +152,7 @@ export class UploadConvertService {
     };
 
     this.uploads.set(id, record);
-    this.hashIndex.set(`${businessId}:${fileHash}`, id);
+    this.hashIndex.set(buildBusinessDuplicateKey(businessId, fileHash), id);
     this.recordAuditEvent(id, businessId, uploadedBy, 'upload_created', id, { filename: file.name, sourceType, fileHash });
     if (duplicateReference) {
       record.duplicateReference = duplicateReference;
@@ -238,15 +238,7 @@ export class UploadConvertService {
   }
 
   private allowTransition(currentStatus: string, nextStatus: string): boolean {
-    const order = ['IMPORTED', 'PARSED', 'REVIEW', 'MAPPED', 'APPROVED', 'POSTED', 'RECONCILED'];
-    const currentIndex = order.indexOf(currentStatus);
-    const nextIndex = order.indexOf(nextStatus);
-    if (currentIndex === -1 || nextIndex === -1) return false;
-    if (currentIndex === nextIndex) return true;
-    if (nextStatus === 'APPROVED' && (currentStatus === 'PARSED' || currentStatus === 'REVIEW' || currentStatus === 'MAPPED')) return true;
-    if (nextStatus === 'POSTED' && currentStatus === 'APPROVED') return true;
-    if (nextStatus === 'RECONCILED' && currentStatus === 'POSTED') return true;
-    return nextIndex === currentIndex + 1;
+    return isAllowedImportTransition(currentStatus, nextStatus);
   }
 
   private updateUploadStatus(uploadId: string, businessId: string, status: UploadRecord['status'], actor: string, reason?: string): UploadRecord {
@@ -317,12 +309,7 @@ export class UploadConvertService {
   }
 
   private generateFileHash(content: string): string {
-    let hash = 0x811c9dc5;
-    for (let index = 0; index < content.length; index += 1) {
-      hash ^= content.charCodeAt(index);
-      hash = Math.imul(hash, 0x01000193);
-    }
-    return (hash >>> 0).toString(16).padStart(8, '0');
+    return createDeterministicHash(content);
   }
 
   private buildDuplicateSignature(candidate: { date: string; description: string; amount: string; reference?: string; accountId?: string; transactionId?: string }): string {
@@ -436,12 +423,14 @@ export class UploadConvertService {
   processBankStatementCsv(csvText: string, fileName: string, businessId: string, uploadedBy: string): ImportBatch {
     const validation = this.validateFile({ name: fileName, size: csvText.length, type: 'text/csv', content: csvText });
     const fileHash = this.generateFileHash(csvText);
-    const duplicateUploadRef = this.hashIndex.get(`${businessId}:${fileHash}`);
+    const duplicateUploadRef = this.hashIndex.get(buildBusinessDuplicateKey(businessId, fileHash));
 
-    if (!validation.isValid) {
-      const upload = this.createRejectedUpload(fileName, businessId, uploadedBy, fileHash, 'BANK_STATEMENT', validation.errors, duplicateUploadRef ?? null);
-      this.hashIndex.set(`${businessId}:${fileHash}`, upload.id);
-      this.recordAuditEvent(upload.id, businessId, uploadedBy, 'upload_rejected', upload.id, { filename: fileName, reason: validation.errors.join('; ') });
+    const csvValidation = validateCsvBankStatement(csvText);
+    if (!validation.isValid || !csvValidation.isValid) {
+      const errors = [...validation.errors, ...csvValidation.errors];
+      const upload = this.createRejectedUpload(fileName, businessId, uploadedBy, fileHash, 'BANK_STATEMENT', errors, duplicateUploadRef ?? null);
+      this.hashIndex.set(buildBusinessDuplicateKey(businessId, fileHash), upload.id);
+      this.recordAuditEvent(upload.id, businessId, uploadedBy, 'upload_rejected', upload.id, { filename: fileName, reason: errors.join('; ') });
       return {
         id: `batch-${Date.now()}`,
         businessId,
@@ -451,27 +440,11 @@ export class UploadConvertService {
         uploadedAt: new Date().toISOString(),
         status: 'REVIEW',
         candidates: [],
-        errors: [{ error: validation.errors.join(' '), action: 'REJECT' }],
+        errors: [{ error: errors.join(' '), action: 'REJECT' }],
       };
     }
 
-    const rows = csvText.split(/\r?\n/).filter((row) => row.trim().length > 0);
-    if (rows.length < 2) {
-      const upload = this.createRejectedUpload(fileName, businessId, uploadedBy, fileHash, 'BANK_STATEMENT', ['CSV file does not contain transaction rows.']);
-      this.hashIndex.set(`${businessId}:${fileHash}`, upload.id);
-      this.recordAuditEvent(upload.id, businessId, uploadedBy, 'upload_rejected', upload.id, { filename: fileName, reason: 'CSV file does not contain transaction rows.' });
-      return {
-        id: `batch-${Date.now()}`,
-        businessId,
-        fileName,
-        source: 'BANK_STATEMENT',
-        uploadedBy,
-        uploadedAt: new Date().toISOString(),
-        status: 'REVIEW',
-        candidates: [],
-        errors: [{ error: 'CSV file does not contain transaction rows.', action: 'REJECT' }],
-      };
-    }
+    const rows = csvValidation.rows;
 
     const existingUpload = duplicateUploadRef ? this.uploads.get(duplicateUploadRef) : undefined;
     const isSameInFlightUpload = Boolean(existingUpload && existingUpload.businessId === businessId && existingUpload.filename === fileName && existingUpload.fileHash === fileHash && existingUpload.status === 'UPLOADED');
@@ -505,10 +478,10 @@ export class UploadConvertService {
         };
 
     this.uploads.set(uploadId, uploadRecord);
-    this.hashIndex.set(`${businessId}:${fileHash}`, uploadId);
+    this.hashIndex.set(buildBusinessDuplicateKey(businessId, fileHash), uploadId);
     this.recordAuditEvent(uploadId, businessId, uploadedBy, 'upload_parsed', uploadId, { filename: fileName, fileHash, candidateCount: 0 });
 
-    const header = this.parseCsvRow(rows[0]);
+    const header = parseCsvRow(rows[0]);
     const normalizedHeader = header.map((value) => value.trim().toLowerCase());
     const hasDate = normalizedHeader.includes('date') || normalizedHeader.includes('transactiondate');
     const hasDescription = normalizedHeader.includes('description') || normalizedHeader.includes('narration');
@@ -516,7 +489,7 @@ export class UploadConvertService {
     if (!hasDate || !hasDescription || !hasAmount) {
       const errors = ['CSV must include date, description or narration, and amount, debit, or credit columns.'];
       const upload = this.createRejectedUpload(fileName, businessId, uploadedBy, fileHash, 'BANK_STATEMENT', errors, duplicateUploadRef ?? null);
-      this.hashIndex.set(`${businessId}:${fileHash}`, upload.id);
+      this.hashIndex.set(buildBusinessDuplicateKey(businessId, fileHash), upload.id);
       return { id: `batch-${Date.now()}`, businessId, fileName, source: 'BANK_STATEMENT', uploadedBy, uploadedAt: new Date().toISOString(), status: 'REVIEW', candidates: [], errors: [{ error: errors[0], action: 'REJECT' }] };
     }
     const seen = new Map<string, number>();
@@ -524,7 +497,7 @@ export class UploadConvertService {
     const errors: Array<{ row?: string; error: string; action: string }> = [];
 
     for (const [index, rowText] of rows.slice(1).entries()) {
-      const row = this.parseCsvRow(rowText);
+      const row = parseCsvRow(rowText);
       if (row.length !== header.length) {
         errors.push({ row: `Row ${index + 2}`, error: 'CSV row has an unexpected number of columns.', action: 'REVIEW' });
         continue;
@@ -538,7 +511,7 @@ export class UploadConvertService {
       const direction = this.detectDirection(rawAmount || amount, debit, credit);
 
       if (!this.isValidIsoDate(date) || amount === '0.00' || !this.isValidAmount(rawAmount || debit || credit)) {
-        errors.push({ row: `Row ${index + 2}`, error: 'Malformed or empty transaction row.', action: 'REVIEW' });
+        errors.push({ row: `Row ${index + 2}`, error: 'Malformed row: malformed or empty transaction row.', action: 'REVIEW' });
         continue;
       }
 

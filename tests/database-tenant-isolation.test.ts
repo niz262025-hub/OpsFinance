@@ -4,6 +4,9 @@ import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 
+import { persistBankStatementImport, getReconciliationSnapshot, assertBusinessMembership, postApprovedBankImport, createReconciliationMatch, completeReconciliation } from '../lib/accounting/server-operations';
+import { workflowClient } from './helpers/pglite-workflow-client';
+
 const userA = '10000000-0000-0000-0000-000000000001';
 const userB = '10000000-0000-0000-0000-000000000002';
 let db: PGlite;
@@ -113,5 +116,34 @@ describe.sequential('PostgreSQL migration replay and tenant A/B boundaries', () 
     await expect(db.query('update public.financial_accounts set account_id=$1 where id=$2', [accountB, cashA])).rejects.toThrow(/COA mapping does not belong/);
     const journal = await scalar("insert into public.journal_entries(business_id,journal_no,journal_date) values ($1,'direct','2026-10-19') returning id as value", [businessA]);
     await expect(db.query('insert into public.journal_lines(journal_entry_id,account_id,debit) values ($1,$2,10)', [journal, accountB])).rejects.toThrow(/account does not belong/);
+  });
+});
+
+
+describe.sequential('upload and reconciliation against the authoritative schema', () => {
+  it('persists a CSV statement and UUID bank rows and reads the reconciliation snapshot', async () => {
+    await db.exec('reset role');
+    const client = workflowClient(db, businessA);
+    const saved = await persistBankStatementImport(client, userA, businessA, 'statement.csv',
+      'Date,Description,Reference,Debit,Credit,Balance\n2026-10-19,Customer payment,INV-1,,25.00,25.00', 'text/csv', cashA);
+    expect(saved.rows[0].id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(await scalar('select count(*)::int as value from bank_transactions where bank_statement_id=$1', [saved.statementId])).toBe(1);
+    const snapshot = await getReconciliationSnapshot(client, businessA);
+    expect(snapshot.statements.some(row => row.id === saved.statementId)).toBe(true);
+    expect(snapshot.bankTransactions.some(row => row.id === saved.rows[0].id)).toBe(true);
+    expect(snapshot.matches).toBeInstanceOf(Array);
+    const revenue = await scalar("insert into accounts(business_id,code,name,account_type,normal_balance) values ($1,'4001','Sales','REVENUE','CREDIT') returning id as value", [businessA]);
+    await asUser(userA);
+    const approved = await postApprovedBankImport(client, userA, businessA, saved.statementId, revenue, 'MONEY_IN');
+    expect(approved.summary.postedCount).toBe(1);
+    await postApprovedBankImport(client, userA, businessA, saved.statementId, revenue, 'MONEY_IN');
+    expect(await scalar("select count(*)::int as value from transactions where business_id=$1 and reference_no='INV-1'", [businessA])).toBe(1);
+    const booked = await scalar("select id as value from transactions where business_id=$1 and reference_no='INV-1'", [businessA]);
+    await createReconciliationMatch(client, userA, businessA, saved.rows[0].id, booked, '25.00');
+    expect((await completeReconciliation(client, userA, businessA, saved.statementId)).status).toBe('COMPLETED');
+  });
+  it('rejects a different business before even consulting local memberships', async () => {
+    const client = workflowClient(db, businessA);
+    await expect(assertBusinessMembership(client, userA, businessB)).rejects.toThrow('Business access denied');
   });
 });
