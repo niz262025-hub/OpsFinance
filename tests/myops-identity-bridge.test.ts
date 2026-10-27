@@ -51,4 +51,14 @@ describe('MYOPS identity to RLS-user bridge',()=>{
   mapping.maybeSingle.mockResolvedValue({data:{supabase_user_id:businessId,business_id:businessId},error:null});
   await expect(verifiedMyopsClient()).rejects.toThrow('Identity mapping revoked.');
  });
+ it('still denies access if entitlement, identity or membership checks fail',async()=>{
+  const session:AppSession={version:1,sessionId,userRef:'u'.repeat(43),userId,businessId,accessToken:'user-jwt',expiresAt:Date.now()+60000};
+  mocks.cookies.mockResolvedValue({get:()=>({value:sealSession(session,'k'.repeat(48))})});
+  mocks.check.mockRejectedValueOnce(new Error('Entitlement denied'));
+  await expect(verifiedMyopsClient()).rejects.toThrow('Entitlement denied');
+  client.auth.getUser.mockResolvedValueOnce({data:{user:null},error:new Error('Invalid token')});
+  await expect(verifiedMyopsClient()).rejects.toThrow('Local identity is no longer valid.');
+  member.maybeSingle.mockResolvedValueOnce({data:null,error:null});
+  await expect(verifiedMyopsClient()).rejects.toThrow('Business membership revoked.');
+ });
 });
