@@ -60,4 +60,29 @@ assert.equal((await db.query('select private.myops_broker_allowed() as allowed')
 await db.exec('reset role; update private.myops_broker_config set enabled=false where id=true; set role authenticated');
 assert.deepEqual((await db.query('select name from businesses')).rows,[{name:'A'}]);
 console.log('PASS: broker gate rejects absent/wrong/malformed credentials; valid broker preserves tenant isolation; rollback restores prior access');
+await db.exec(`reset role;
+INSERT INTO accounts(id,business_id,code,name,account_type,normal_balance) VALUES
+('aaaaaaaa-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','A1','A cash','ASSET','DEBIT'),
+('bbbbbbbb-0000-0000-0000-000000000001','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','B1','B cash','ASSET','DEBIT');
+INSERT INTO journal_entries(id,business_id,journal_no,journal_date) VALUES
+('aaaaaaaa-0000-0000-0000-000000000002','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','J1','2026-10-26');
+INSERT INTO journal_lines(id,journal_entry_id,account_id,debit) VALUES
+('aaaaaaaa-0000-0000-0000-000000000003','aaaaaaaa-0000-0000-0000-000000000002','aaaaaaaa-0000-0000-0000-000000000001',10);`);
+// Exercise the trigger even with RLS bypass, as for an accidental service-role write.
+await assert.rejects(db.exec("INSERT INTO journal_lines(journal_entry_id,account_id,debit) VALUES ('aaaaaaaa-0000-0000-0000-000000000002','bbbbbbbb-0000-0000-0000-000000000001',10)"), /does not belong/);
+await assert.rejects(db.exec("UPDATE journal_lines SET account_id='bbbbbbbb-0000-0000-0000-000000000001' WHERE id='aaaaaaaa-0000-0000-0000-000000000003'"), /does not belong/);
+assert.equal((await db.query("SELECT account_id FROM journal_lines WHERE id='aaaaaaaa-0000-0000-0000-000000000003'")).rows[0].account_id, 'aaaaaaaa-0000-0000-0000-000000000001');
+await db.exec("INSERT INTO financial_accounts(id,business_id,name,type,account_code) VALUES ('bbbbbbbb-0000-0000-0000-000000000004','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','B bank','BANK','BANK1')");
+await assert.rejects(db.exec("UPDATE journal_lines SET financial_account_id='bbbbbbbb-0000-0000-0000-000000000004' WHERE id='aaaaaaaa-0000-0000-0000-000000000003'"), /does not belong/);
+console.log('PASS: cross-business journal account and financial-account references denied; original line preserved');
+await db.exec("reset role; set role authenticated; select set_config('app.session_user_id','11111111-1111-1111-1111-111111111111',false)");
+const created=await db.query("select public.create_business_with_owner(' New Business  ','REG-1',null,'+6012345','owner@test.invalid','MYR',null) as id");
+const newBusinessId=created.rows[0].id;
+assert.equal((await db.query('select count(*)::int as count from business_members where business_id=$1 and user_id=$2 and role=$3',[newBusinessId,'11111111-1111-1111-1111-111111111111','OWNER'])).rows[0].count,1);
+assert.equal((await db.query('select name from businesses where id=$1',[newBusinessId])).rows[0].name,'New Business');
+await db.exec('reset role');
+assert.equal((await db.query('select count(*)::int as count from subscriptions where business_id=$1',[newBusinessId])).rows[0].count,0);
+await db.exec('set role authenticated');
+await assert.rejects(db.query("select public.create_business_with_owner('   ',null,null,null,null,'MYR',null)"),/Business name must contain/);
+console.log('PASS: secure business bootstrap creates owner membership without billing or trial');
 await db.close();

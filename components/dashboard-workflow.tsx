@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 import { AccountingEngine, type BusinessAccount } from '../packages/accounting';
 import { FinancialReportService } from '../packages/reports';
+import { BusinessOnboarding } from './business-onboarding';
 
 type DashboardWorkflowProps = {
   businessId?: string;
@@ -150,7 +151,8 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
               <h1>OpsFinance Dashboard</h1>
             </div>
           </header>
-          <p style={{ margin: '0.5rem 0 1rem', color: 'var(--muted)' }}>No active business is available for this user yet.</p>
+          <p style={{ margin: '0.5rem 0 1rem', color: 'var(--muted)' }}>Set up your business to start using OpsFinance. Your records will be kept in a separate business workspace.</p>
+          <BusinessOnboarding />
           <div className="opsfinance-kpi-grid" style={{ marginTop: '1rem' }}>
             {['Total Cash', 'Sales / Revenue', 'Expenses', 'Net Profit'].map((label) => (
               <div key={label} className="opsfinance-stat-card">
