@@ -16,7 +16,11 @@ export function ssoEnabled() { return process.env.MYOPS_SSO_ENABLED === 'true'; 
 export function ssoConfig(): { transport: MyopsTransportConfig; appOrigin: string; secret: string } {
   // Production cutover additionally needs a verified Data API broker gate so old local
   // Supabase credentials cannot circumvent central entitlement checks. Not enabled here.
-  if (!ssoEnabled() || process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED !== 'true' || process.env.VERCEL_ENV === 'production') throw new Error('SSO is not enabled for this deployment.');
+  if (!ssoEnabled() || process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED !== 'true') throw new Error('SSO is not enabled for this deployment.');
+  // Production stays fail-closed until the Data API broker gate is reviewed and explicitly enabled.
+  if (process.env.VERCEL_ENV === 'production' && process.env.MYOPS_PRODUCTION_DATA_GATE_VERIFIED !== 'true') {
+    throw new Error('Production SSO requires a verified Data API broker gate.');
+  }
   const appOrigin = process.env.OPSFINANCE_ORIGIN ?? '';
   const origin = process.env.MYOPS_ORIGIN ?? '';
   for (const value of [appOrigin, origin]) {
