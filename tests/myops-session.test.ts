@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto';
 // @vitest-environment node
 import { afterEach,describe,expect,it,vi } from 'vitest';
 import { openSession,sealSession,ssoConfig,type AppSession } from '../lib/auth/myops-session';
@@ -26,7 +27,7 @@ describe('sealed MYOPS application session',()=>{
  it('requires aligned flags, HTTPS origins and a verified production gate',()=>{
   vi.stubEnv('MYOPS_SSO_ENABLED','true');vi.stubEnv('NEXT_PUBLIC_MYOPS_SSO_ENABLED','true');
   vi.stubEnv('OPSFINANCE_ORIGIN','https://finance.example');vi.stubEnv('MYOPS_ORIGIN','https://portal.example');
-  vi.stubEnv('MYOPS_APP_PRIVATE_KEY','test-key');vi.stubEnv('MYOPS_APP_SESSION_SECRET',secret);vi.stubEnv('VERCEL_ENV','preview');
+  vi.stubEnv('MYOPS_APP_PRIVATE_KEY',generateKeyPairSync('ed25519').privateKey.export({type:'pkcs8',format:'pem'}).toString());vi.stubEnv('MYOPS_APP_SESSION_SECRET',secret);vi.stubEnv('VERCEL_ENV','preview');
   expect(ssoConfig().transport.appId).toBe('opsfinance');
   vi.stubEnv('VERCEL_ENV','production');expect(()=>ssoConfig()).toThrow('verified Data API broker gate');
   vi.stubEnv('MYOPS_PRODUCTION_DATA_GATE_VERIFIED','true');expect(ssoConfig().transport.appId).toBe('opsfinance');

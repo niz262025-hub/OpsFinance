@@ -1,3 +1,4 @@
+import {generateKeyPairSync} from 'node:crypto';
 // @vitest-environment node
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 const mocks=vi.hoisted(()=>({create:vi.fn(),redeem:vi.fn(),check:vi.fn(),cookies:vi.fn()}));
@@ -14,7 +15,7 @@ const query=(data:unknown)=>{const q={select:vi.fn(),eq:vi.fn(),maybeSingle:vi.f
 let mapping:ReturnType<typeof query>;let member:ReturnType<typeof query>;let admin:any;let client:any;
 beforeEach(()=>{
  vi.clearAllMocks();
- for(const [key,value] of Object.entries({MYOPS_SSO_ENABLED:'true',NEXT_PUBLIC_MYOPS_SSO_ENABLED:'true',OPSFINANCE_ORIGIN:'https://finance.example',MYOPS_ORIGIN:'https://portal.example',MYOPS_APP_PRIVATE_KEY:'key',MYOPS_APP_SESSION_SECRET:'k'.repeat(48),VERCEL_ENV:'preview',SUPABASE_URL:'https://database.example',SUPABASE_ANON_KEY:'public-key',SUPABASE_SERVICE_ROLE_KEY:'admin-secret'}))vi.stubEnv(key,value);
+ for(const [key,value] of Object.entries({MYOPS_SSO_ENABLED:'true',NEXT_PUBLIC_MYOPS_SSO_ENABLED:'true',OPSFINANCE_ORIGIN:'https://finance.example',MYOPS_ORIGIN:'https://portal.example',MYOPS_APP_PRIVATE_KEY:generateKeyPairSync('ed25519').privateKey.export({type:'pkcs8',format:'pem'}).toString(),MYOPS_APP_SESSION_SECRET:'k'.repeat(48),VERCEL_ENV:'preview',SUPABASE_URL:'https://database.example',SUPABASE_ANON_KEY:'public-key',SUPABASE_SERVICE_ROLE_KEY:'admin-secret'}))vi.stubEnv(key,value);
  mapping=query({supabase_user_id:userId,business_id:businessId});member=query({business_id:businessId});
  admin={from:vi.fn(()=>mapping),auth:{admin:{getUserById:vi.fn().mockResolvedValue({data:{user},error:null}),generateLink:vi.fn().mockResolvedValue({data:{user,properties:{hashed_token:'server-otp'}},error:null})}}};
  client={from:vi.fn(()=>member),auth:{verifyOtp:vi.fn().mockResolvedValue({data:{user,session:{access_token:'user-jwt',expires_at:Math.floor(Date.now()/1000)+3600}},error:null}),getUser:vi.fn().mockResolvedValue({data:{user},error:null})}};

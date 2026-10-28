@@ -1,3 +1,4 @@
+import {generateKeyPairSync} from 'node:crypto';
 // @vitest-environment node
 import { afterEach,beforeEach,describe,expect,it,vi } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -8,7 +9,7 @@ const grant={version:1,sessionId:'c08f2182-2a66-4fc9-bbe6-02a21da4d759',userRef:
 function request(origin='https://finance.example',body:unknown={ticket:'t'.repeat(43)}){return new NextRequest('https://finance.example/api/myops/launch',{method:'POST',headers:{origin,'Content-Type':'application/json'},body:JSON.stringify(body)});}
 beforeEach(()=>{
  vi.clearAllMocks();
- for(const [key,value] of Object.entries({MYOPS_SSO_ENABLED:'true',NEXT_PUBLIC_MYOPS_SSO_ENABLED:'true',OPSFINANCE_ORIGIN:'https://finance.example',MYOPS_ORIGIN:'https://portal.example',MYOPS_APP_PRIVATE_KEY:'key',MYOPS_APP_SESSION_SECRET:'k'.repeat(48),VERCEL_ENV:'preview'}))vi.stubEnv(key,value);
+ for(const [key,value] of Object.entries({MYOPS_SSO_ENABLED:'true',NEXT_PUBLIC_MYOPS_SSO_ENABLED:'true',OPSFINANCE_ORIGIN:'https://finance.example',MYOPS_ORIGIN:'https://portal.example',MYOPS_APP_PRIVATE_KEY:generateKeyPairSync('ed25519').privateKey.export({type:'pkcs8',format:'pem'}).toString(),MYOPS_APP_SESSION_SECRET:'k'.repeat(48),VERCEL_ENV:'preview'}))vi.stubEnv(key,value);
  establish.mockResolvedValue(grant);
 });
 afterEach(()=>vi.unstubAllEnvs());

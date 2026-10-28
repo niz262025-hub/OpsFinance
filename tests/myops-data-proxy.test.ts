@@ -1,3 +1,4 @@
+import {generateKeyPairSync} from 'node:crypto';
 // @vitest-environment node
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {NextRequest} from 'next/server';
@@ -6,7 +7,7 @@ vi.mock('../lib/auth/myops-server',()=>({verifiedMyopsClient:verified}));
 import {GET,POST} from '../app/api/myops/data/[...path]/route';
 beforeEach(()=>{
  vi.clearAllMocks();
- for(const [key,value] of Object.entries({MYOPS_SSO_ENABLED:'true',NEXT_PUBLIC_MYOPS_SSO_ENABLED:'true',OPSFINANCE_ORIGIN:'https://finance.example',MYOPS_ORIGIN:'https://portal.example',MYOPS_APP_PRIVATE_KEY:'key',MYOPS_APP_SESSION_SECRET:'k'.repeat(48),VERCEL_ENV:'preview',SUPABASE_URL:'https://database.example',SUPABASE_ANON_KEY:'public-key'}))vi.stubEnv(key,value);
+ for(const [key,value] of Object.entries({MYOPS_SSO_ENABLED:'true',NEXT_PUBLIC_MYOPS_SSO_ENABLED:'true',OPSFINANCE_ORIGIN:'https://finance.example',MYOPS_ORIGIN:'https://portal.example',MYOPS_APP_PRIVATE_KEY:generateKeyPairSync('ed25519').privateKey.export({type:'pkcs8',format:'pem'}).toString(),MYOPS_APP_SESSION_SECRET:'k'.repeat(48),VERCEL_ENV:'preview',SUPABASE_URL:'https://database.example',SUPABASE_ANON_KEY:'public-key'}))vi.stubEnv(key,value);
  verified.mockResolvedValue({session:{accessToken:'verified-user-jwt'}});
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('[]',{headers:{'Content-Type':'application/json'}})));
 });
