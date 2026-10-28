@@ -30,7 +30,10 @@ describe('sealed MYOPS application session',()=>{
   vi.stubEnv('MYOPS_APP_PRIVATE_KEY',generateKeyPairSync('ed25519').privateKey.export({type:'pkcs8',format:'pem'}).toString());vi.stubEnv('MYOPS_APP_SESSION_SECRET',secret);vi.stubEnv('VERCEL_ENV','preview');
   expect(ssoConfig().transport.appId).toBe('opsfinance');
   vi.stubEnv('VERCEL_ENV','production');expect(()=>ssoConfig()).toThrow('verified Data API broker gate');
-  vi.stubEnv('MYOPS_PRODUCTION_DATA_GATE_VERIFIED','true');expect(ssoConfig().transport.appId).toBe('opsfinance');
+  vi.stubEnv('MYOPS_PRODUCTION_DATA_GATE_VERIFIED','true');
+  vi.stubEnv('MYOPS_DATA_BROKER_KEY','');expect(()=>ssoConfig()).toThrow('server Data API broker credential');
+  vi.stubEnv('MYOPS_DATA_BROKER_KEY','bad\nheader');expect(()=>ssoConfig()).toThrow('Invalid server broker configuration');
+  vi.stubEnv('MYOPS_DATA_BROKER_KEY','b'.repeat(48));expect(ssoConfig().transport.appId).toBe('opsfinance');
   vi.stubEnv('VERCEL_ENV','preview');vi.stubEnv('OPSFINANCE_ORIGIN','https://finance.example/path');expect(()=>ssoConfig()).toThrow();
  });
 });

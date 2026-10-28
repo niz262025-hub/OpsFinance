@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, createPrivateKey, randomBytes } from 'node:crypto';
 import type { MyopsTransportConfig } from './myops-transport';
+import { myopsBrokerHeaders } from './myops-broker';
 
 export const MYOPS_COOKIE = '__Host-opsfinance-sso';
 export interface AppSession {
@@ -20,6 +21,9 @@ export function ssoConfig(): { transport: MyopsTransportConfig; appOrigin: strin
   // Production stays fail-closed until the Data API broker gate is reviewed and explicitly enabled.
   if (process.env.VERCEL_ENV === 'production' && process.env.MYOPS_PRODUCTION_DATA_GATE_VERIFIED !== 'true') {
     throw new Error('Production SSO requires a verified Data API broker gate.');
+  }
+  if (process.env.VERCEL_ENV === 'production' && !myopsBrokerHeaders()['x-myops-broker-key']) {
+    throw new Error('Production SSO requires a server Data API broker credential.');
   }
   const appOrigin = process.env.OPSFINANCE_ORIGIN ?? '';
   const origin = process.env.MYOPS_ORIGIN ?? '';
