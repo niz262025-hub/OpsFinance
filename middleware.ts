@@ -17,7 +17,8 @@ export async function middleware(request: NextRequest) {
     const protectedPath=PROTECTED_PATH_PREFIXES.some(prefix=>pathname===prefix||pathname.startsWith(`${prefix}/`));
     const protectedApi=pathname.startsWith('/api/') && !pathname.startsWith('/api/myops/');
     if (['/login','/register','/auth/callback','/','/opsfinance'].includes(pathname)) {
-      return NextResponse.redirect(new URL('/dashboard',process.env.MYOPS_ORIGIN??'https://www.myops.com.my'));
+      // All interactive sign-in happens at MYOPS; no second OpsFinance login.
+      return NextResponse.redirect(new URL('/login',process.env.MYOPS_ORIGIN??'https://www.myops.com.my'));
     }
     if(protectedPath||protectedApi) {
       try {
