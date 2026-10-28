@@ -26,6 +26,6 @@ describe('SSO middleware boundary',()=>{
   expect((await middleware(request('/api/accounts',sealSession(session,secret)))).status).toBe(401);
  });
  it('replaces local sign-in with the fixed MYOPS account destination',async()=>{
-  expect((await middleware(request('/login?next=https://attacker.example'))).headers.get('location')).toBe('https://portal.example/dashboard');
+  expect((await middleware(request('/login?next=https://attacker.example'))).headers.get('location')).toBe('https://portal.example/login');
  });
 });
