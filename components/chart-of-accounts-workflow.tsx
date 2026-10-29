@@ -8,6 +8,7 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
   const [accounts, setAccounts] = useState<Array<any>>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     code: '',
     name: '',
@@ -21,6 +22,7 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
     if (!businessId) return;
 
     setLoading(true);
+    setError(null);
     try {
       const response = await fetch(`/api/accounts?businessId=${encodeURIComponent(businessId)}`);
       const payload = await response.json();
@@ -42,7 +44,9 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
   }, [loadAccounts]);
 
   const handleCreate = async () => {
-    if (!businessId) return;
+    if (!businessId || saving) return;
+    setSaving(true);
+    setError(null);
 
     try {
       const response = await fetch('/api/accounts', {
@@ -68,6 +72,8 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
       await loadAccounts();
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Could not create account.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -88,7 +94,7 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
             <label>Normal Balance<select value={form.normal_balance} onChange={(event) => setForm((current) => ({ ...current, normal_balance: event.target.value }))}><option value="DEBIT">DEBIT</option><option value="CREDIT">CREDIT</option></select></label>
           </div>
           <div className="opsfinance-action-row">
-            <button type="button" className="opsfinance-primary-button" onClick={handleCreate}>Create account</button>
+            <button type="button" className="opsfinance-primary-button" disabled={saving || loading} onClick={handleCreate}>{saving ? 'Saving…' : 'Create account'}</button>
             <label className="opsfinance-inline-label"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))} /> Active</label>
           </div>
         </section>
