@@ -58,7 +58,7 @@ export async function verifiedMyopsClient() {
     client.from('business_members').select('business_id')
       .eq('user_id',session.userId).eq('business_id',session.businessId).maybeSingle(),
   ]);
-  if (error || !data.user || data.user.id !== session.userId) throw new Error('Local identity is no longer valid.');
+  if (error || data.user?.id !== session.userId) throw new Error('Local identity is no longer valid.');
   if (memberError || !member) throw new Error('Business membership revoked.');
   // Existing server pages call auth.getUser() without passing a token.
   client.auth.getUser = async () => ({ data:{user:data.user},error:null });
