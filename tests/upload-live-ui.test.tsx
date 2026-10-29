@@ -15,9 +15,12 @@ it('rejects unsupported binary files before trying to read or send them',async()
 it('invalidates an old preview when the source text changes',async()=>{
   vi.stubGlobal('fetch',vi.fn(async(url)=>({ok:true,json:async()=>String(url).startsWith('/api/accounts')
     ? {accounts:[{id:'a1',code:'4000',name:'UAT Revenue'}]}
+    : String(url).startsWith('/api/financial-accounts') ? {financialAccounts:[{id:'bank1',account_code:'BANK1',name:'Bank One',status:'ACTIVE',account_id:'ledger1'}]}
     : {statementId:'s1',rows:[{id:'r1',date:'2026-10-29',description:'UAT',amount:'10.00',direction:'CREDIT'}]}})));
   render(<UploadWorkflow businessId="business-1"/>);
   await screen.findByRole('option',{name:'4000 - UAT Revenue'});
+  await screen.findByRole('option',{name:'BANK1 - Bank One'});
+  fireEvent.change(screen.getByLabelText('Bank or financial account'),{target:{value:'bank1'}});
   fireEvent.change(screen.getByLabelText('Posting account'),{target:{value:'a1'}});
   fireEvent.change(screen.getByLabelText('Preview content'),{target:{value:'Date,Amount\n2026-10-29,10'}});
   fireEvent.click(screen.getByRole('button',{name:'Parse & review'}));
@@ -25,4 +28,33 @@ it('invalidates an old preview when the source text changes',async()=>{
   await waitFor(()=>expect((screen.getByRole('button',{name:'Approve and post'}) as HTMLButtonElement).disabled).toBe(false));
   fireEvent.change(screen.getByLabelText('Preview content'),{target:{value:'changed input'}});
   expect((screen.getByRole('button',{name:'Approve and post'}) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it('requires an explicit eligible account, sends the selected second account, and invalidates preview on account change',async()=>{
+  const fetch=vi.fn(async(url)=>({ok:true,json:async()=>String(url).startsWith('/api/accounts')
+    ? {accounts:[{id:'a1',code:'4000',name:'UAT Revenue'}]}
+    : String(url).startsWith('/api/financial-accounts') ? {financialAccounts:[
+      {id:'bank1',account_code:'BANK1',name:'Bank One',status:'ACTIVE',account_id:'ledger1'},
+      {id:'bank2',account_code:'BANK2',name:'Bank Two',status:'ACTIVE',account_id:'ledger2'},
+      {id:'inactive',account_code:'OLD',name:'Inactive',status:'INACTIVE',account_id:'ledger3'},
+      {id:'unmapped',account_code:'RAW',name:'Unmapped',status:'ACTIVE',account_id:null},
+    ]} : {statementId:'s2',rows:[{id:'r2',date:'2026-10-29',description:'UAT',amount:'10.00',direction:'CREDIT'}]}}));
+  vi.stubGlobal('fetch',fetch);
+  render(<UploadWorkflow businessId="business-1"/>);
+  await screen.findByRole('option',{name:'BANK2 - Bank Two'});
+  expect(screen.queryByRole('option',{name:'OLD - Inactive'})).toBeNull();
+  expect(screen.queryByRole('option',{name:'RAW - Unmapped'})).toBeNull();
+  fireEvent.change(screen.getByLabelText('Preview content'),{target:{value:'Date,Amount\n2026-10-29,10'}});
+  expect((screen.getByRole('button',{name:'Parse & review'}) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByLabelText('Upload a bank statement') as HTMLInputElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('Bank or financial account'),{target:{value:'bank2'}});
+  fireEvent.change(screen.getByLabelText('Posting account'),{target:{value:'a1'}});
+  fireEvent.click(screen.getByRole('button',{name:'Parse & review'}));
+  await screen.findByText('Preview loaded 1 statement rows.');
+  const preview=fetch.mock.calls.find(call=>call[0]==='/api/upload');
+  expect(JSON.parse((preview as any)[1].body).financialAccountId).toBe('bank2');
+  await waitFor(()=>expect((screen.getByRole('button',{name:'Approve and post'}) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.change(screen.getByLabelText('Bank or financial account'),{target:{value:'bank1'}});
+  expect((screen.getByRole('button',{name:'Approve and post'}) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByText('Imported rows')).toBeNull();
 });

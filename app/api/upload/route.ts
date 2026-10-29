@@ -79,6 +79,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Upload content is required for preview.' }, { status: 400 });
       }
 
+      const financialAccountId = String(payload.financialAccountId ?? '').trim();
+      if (!financialAccountId) {
+        return NextResponse.json({ error: 'Select the bank or financial account for this statement.' }, { status: 400 });
+      }
+
       const statementResult = await persistBankStatementImport(
         supabase,
         user.id,
@@ -86,7 +91,7 @@ export async function POST(request: Request) {
         fileName,
         content,
         fileType,
-        payload.financialAccountId ?? null,
+        financialAccountId,
       );
 
       return NextResponse.json({
