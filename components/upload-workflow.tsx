@@ -73,13 +73,15 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
   const handleFileSelection = async (file: File) => {
     if (!file) return;
 
-    const content = await file.text();
-    setSourceText(content);
     setError(null);
     setSuccess(null);
     setIsLoading(true);
 
     try {
+      if (!/\.(csv|txt)$/i.test(file.name)) throw new Error('CSV and TXT statements only. PDF, image and Excel extraction is not available yet.');
+      if (file.size > 10 * 1024 * 1024) throw new Error('Statement exceeds the 10 MB limit.');
+      const content = await file.text();
+      setSourceText(content);
       const response = await fetch('/api/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -180,7 +182,7 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
       <div style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gap: '1rem' }}>
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.5rem' }}>
           <h1 style={{ marginTop: 0 }}>Upload &amp; Convert</h1>
-          <p style={{ marginBottom: 0 }}>Import statement data and approve it server-side before posting to the ledger.</p>
+          <p style={{ marginBottom: 0 }}>Import a CSV or TXT bank statement, review it, then approve posting. PDF, image and Excel extraction is not available yet.</p>
         </div>
 
         <section style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1rem', display: 'grid', gap: '0.8rem' }}>
@@ -188,7 +190,7 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
             Upload a bank statement
             <input
               type="file"
-              accept=".csv,.xls,.xlsx,.pdf,.png,.jpg,.jpeg,.webp"
+              accept=".csv,.txt,text/csv,text/plain"
               onChange={async (event) => {
                 const file = event.target.files?.[0];
                 if (file) {
@@ -202,7 +204,7 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
             Preview content
             <textarea
               value={sourceText}
-              onChange={(event) => setSourceText(event.target.value)}
+              onChange={(event) => { setSourceText(event.target.value); setStatementId(null); setRows([]); setSuccess(null); }}
               rows={12}
               style={{ resize: 'vertical', fontFamily: 'monospace' }}
               placeholder="Upload a CSV bank statement or paste a statement export to preview it here."

@@ -489,13 +489,17 @@ export async function getReconciliationSnapshot(
   if (statementError) throw new Error(statementError.message ?? 'Unable to load bank statements.');
 
   const statementIds = statements.map((statement: any) => statement.id);
-  const [{ data: bankTransactions = [] }, { data: bookTransactions = [] }, { data: matches = [] }] = await Promise.all([
+  const snapshotResults = await Promise.all([
     supabase.from('bank_transactions').select('*').in('bank_statement_id', statementIds),
     supabase.from('transactions').select('*').eq('business_id', businessId).eq('status', 'POSTED').order('transaction_date', { ascending: false }),
     supabase.from('reconciliation_matches').select('*').eq('business_id', businessId),
   ]);
+  for (const result of snapshotResults) {
+    if (result.error) throw new Error(result.error.message ?? 'Unable to load reconciliation data.');
+  }
+  const [{data: bankTransactions = []}, {data: bookTransactions = []}, {data: matches = []}] = snapshotResults;
 
-  const unmatchedBank = (bankTransactions as any[]).filter((transaction: any) => transaction.status !== 'MATCHED' && transaction.status !== 'PARTIAL').length;
+  const unmatchedBank = (bankTransactions as any[]).filter((transaction: any) => transaction.status !== 'MATCHED').length;
   const matched = (matches as any[]).length;
   const summary = {
     matched,

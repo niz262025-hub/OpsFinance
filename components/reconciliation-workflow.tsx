@@ -30,6 +30,8 @@ type BookTransaction = {
 };
 
 export function ReconciliationWorkflow({ businessId, businessContextError }: ReconciliationWorkflowProps) {
+  const [openingBalance, setOpeningBalance] = useState<string | null>(null);
+  const [matches, setMatches] = useState<Array<{bank_transaction_id:string;matched_amount:string}>>([]);
   const [statementId, setStatementId] = useState<string | null>(null);
   const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
   const [bookTransactions, setBookTransactions] = useState<BookTransaction[]>([]);
@@ -52,7 +54,9 @@ export function ReconciliationWorkflow({ businessId, businessContextError }: Rec
       }
 
       const statements = Array.isArray(payload.statements) ? payload.statements : [];
-      const bankRows = Array.isArray(payload.bankTransactions) ? payload.bankTransactions : [];
+      const bankRows = (Array.isArray(payload.bankTransactions) ? payload.bankTransactions : []).filter((row: BankTransaction) => row.bank_statement_id === statements[0]?.id);
+      setMatches(Array.isArray(payload.matches) ? payload.matches : []);
+      setOpeningBalance(statements[0]?.opening_balance ?? null);
       const bookRows = Array.isArray(payload.bookTransactions) ? payload.bookTransactions : [];
 
       setStatementId(statements[0]?.id ?? null);
@@ -84,21 +88,23 @@ export function ReconciliationWorkflow({ businessId, businessContextError }: Rec
     return () => window.clearTimeout(timeoutId);
   }, [businessId, loadSnapshot]);
 
-  const unmatchedRows = useMemo(() => bankTransactions.filter((row) => row.status !== 'MATCHED' && row.status !== 'PARTIAL'), [bankTransactions]);
+  const unmatchedRows = useMemo(() => bankTransactions.filter((row) => row.status !== 'MATCHED'), [bankTransactions]);
   const statementSummary = useMemo(() => {
     const bankTotal = bankTransactions.reduce((sum, row) => sum + Number(row.amount || '0.00'), 0);
     const bookTotal = bookTransactions.reduce((sum, row) => sum + Number(row.amount || '0.00'), 0);
-    const openingBalance = bankTotal > 0 ? 12500 : 0;
-    const matchedTotal = Math.min(bankTotal, bookTotal);
-    const outstanding = Math.max(bankTotal - matchedTotal, 0);
+    const outstanding = bankTransactions.reduce((sum, row) => {
+      const allocated = matches.filter(match => match.bank_transaction_id === row.id)
+        .reduce((total, match) => total + Number(match.matched_amount || '0'), 0);
+      return sum + Math.max(Number(row.amount || '0') - allocated, 0);
+    }, 0);
 
     return {
-      openingBalance: `RM${openingBalance.toFixed(2)}`,
+      openingBalance: openingBalance === null ? 'Not provided' : `RM${Number(openingBalance).toFixed(2)}`,
       statementTotal: `RM${bankTotal.toFixed(2)}`,
       postedTotal: `RM${bookTotal.toFixed(2)}`,
       outstanding: `RM${outstanding.toFixed(2)}`,
     };
-  }, [bankTransactions, bookTransactions]);
+  }, [bankTransactions, bookTransactions, matches, openingBalance]);
 
   if (!businessId) {
     return (
@@ -193,7 +199,7 @@ export function ReconciliationWorkflow({ businessId, businessContextError }: Rec
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
               <div>Opening balance<br /><span>{statementSummary.openingBalance}</span></div>
               <div>Statement total<br /><span>{statementSummary.statementTotal}</span></div>
-              <div>Posted total<br /><span>{statementSummary.postedTotal}</span></div>
+              <div>Business posted total<br /><span>{statementSummary.postedTotal}</span></div>
               <div>Outstanding<br /><span>{statementSummary.outstanding}</span></div>
             </div>
           </div>
@@ -234,7 +240,7 @@ export function ReconciliationWorkflow({ businessId, businessContextError }: Rec
             <button type="button" onClick={handleMatch} disabled={isLoading || !selectedBankTransactionId || !selectedBookTransactionId} style={{ background: '#0f172a', color: '#fff', border: 'none', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}>
               {isLoading ? 'Processing…' : 'Create match'}
             </button>
-            <button type="button" onClick={handleComplete} disabled={isLoading || !statementId || unmatchedRows.length > 0} style={{ background: '#e2e8f0', color: '#0f172a', border: 'none', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}>
+            <button type="button" onClick={handleComplete} disabled={isLoading || !statementId || bankTransactions.length === 0 || unmatchedRows.length > 0} style={{ background: '#e2e8f0', color: '#0f172a', border: 'none', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}>
               Complete reconciliation
             </button>
             <button type="button" onClick={loadSnapshot} style={{ background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}>
