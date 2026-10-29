@@ -104,6 +104,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [idleExpired, setIdleExpired] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth > 900) {
@@ -113,7 +114,22 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
 
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED !== 'true') return;
-    return trackUserActivity(document, () => fetch('/api/myops/activity', {method:'POST',credentials:'same-origin',cache:'no-store'}));
+    return trackUserActivity(document,
+      () => fetch('/api/myops/activity', {method:'POST',credentials:'same-origin',cache:'no-store'}),
+      Date.now,
+      () => {
+        setIdleExpired(true);
+        void (async () => {
+          try {
+            const response = await fetch('/api/myops/logout', {method:'POST',credentials:'same-origin',
+              headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'inactivity'}),
+              signal:AbortSignal.timeout(10000)});
+            if (!response.ok) throw new Error('Session cleanup unavailable.');
+            const result = await response.json();
+            window.location.replace(typeof result.next === 'string' ? result.next : '/login');
+          } catch { window.location.replace('/login'); }
+        })();
+      });
   }, []);
 
   const signOut = async () => {
@@ -129,6 +145,8 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
     }
     router.push(isPreviewAuthBypassEnabled() ? '/dashboard' : '/login');
   };
+
+  if (idleExpired) return <main role="status">Session expired. Returning to MYOPS login…</main>;
 
   return (
     <div className="opsfinance-app-shell">

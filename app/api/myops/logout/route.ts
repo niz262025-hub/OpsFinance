@@ -5,7 +5,9 @@ export async function POST(request:NextRequest) {
   try {
     const {appOrigin,transport}=ssoConfig();
     if(request.headers.get('origin')!==appOrigin||request.nextUrl.origin!==appOrigin)return NextResponse.json({error:'Request rejected.'},{status:403});
-    const response=NextResponse.json({next:`${transport.origin}/dashboard`},{headers:{'Cache-Control':'no-store'}});
+    const body = await request.json().catch(() => null);
+    const destination = body?.reason === 'inactivity' ? '/login' : '/dashboard';
+    const response=NextResponse.json({next:`${transport.origin}${destination}`},{headers:{'Cache-Control':'no-store'}});
     response.cookies.set(MYOPS_COOKIE,'',{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:0});
     // MYOPS owns the central logout POST. The portal dashboard supplies that action;
     // navigating by GET must not silently log the user out or claim global revocation.
