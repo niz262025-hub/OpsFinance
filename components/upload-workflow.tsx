@@ -43,6 +43,7 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
   const [rows, setRows] = useState<UploadRow[]>([]);
   const [sourceText, setSourceText] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [showImportError, setShowImportError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -121,6 +122,7 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
       setSuccess(`Preview loaded ${payload.rows?.length ?? 0} statement rows.`);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Preview failed.');
+      setShowImportError(true);
       setStatementId(null);
       setRows([]);
     } finally {
@@ -161,6 +163,7 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
       setSuccess(`Preview loaded ${payload.rows?.length ?? 0} statement rows.`);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Preview failed.');
+      setShowImportError(true);
       setStatementId(null);
       setRows([]);
     } finally {
@@ -228,6 +231,7 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
               ))}
             </select>
           </label>
+          <p style={{ margin: 0 }}>The statement must include its full account number in an Account Number column or an Account Number metadata line. Wrong, missing or masked account numbers cancel the import.</p>
           <p style={{ margin: 0 }}>Only active financial accounts with a ledger mapping are available. Create or update them in Financial Accounts.</p>
           <label style={{ display: 'grid', gap: '0.25rem' }}>
             Upload a bank statement
@@ -277,7 +281,8 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
             </button>
           </div>
 
-          {error ? <div style={{ color: '#b91c1c', fontWeight: 600 }}>{error}</div> : null}
+          {showImportError && error ? <div role="alertdialog" aria-modal="true" aria-labelledby="import-error-title" style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(15,23,42,0.5)',display:'grid',placeItems:'center'}}><div style={{background:'white',padding:'1.5rem',borderRadius:12,maxWidth:480}}><h2 id="import-error-title">Import cancelled</h2><p>{error}</p><button autoFocus onClick={() => setShowImportError(false)}>Close</button></div></div> : null}
+          {error && !showImportError ? <div role="alert" style={{ color: '#b91c1c', fontWeight: 600 }}>{error}</div> : null}
           {success ? <div style={{ color: '#166534', fontWeight: 600 }}>{success}</div> : null}
 
           {rows.length ? (

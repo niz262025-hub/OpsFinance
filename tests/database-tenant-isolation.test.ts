@@ -123,9 +123,13 @@ describe.sequential('PostgreSQL migration replay and tenant A/B boundaries', () 
 describe.sequential('upload and reconciliation against the authoritative schema', () => {
   it('persists a CSV statement and UUID bank rows and reads the reconciliation snapshot', async () => {
     await db.exec('reset role');
+    await db.query("update financial_accounts set account_number='001235' where id=$1", [cashA]);
     const client = workflowClient(db, businessA);
+    const before = await scalar('select count(*)::int as value from bank_statements');
+    await expect(persistBankStatementImport(client,userA,businessA,'wrong.csv','Account Number,3450\nDate,Description,Debit,Credit\n2026-10-29,UAT,,25.00','text/csv',cashA)).rejects.toThrow('Wrong account uploaded');
+    expect(await scalar('select count(*)::int as value from bank_statements')).toBe(before);
     const saved = await persistBankStatementImport(client, userA, businessA, 'statement.csv',
-      'Date,Description,Reference,Debit,Credit,Balance\n2026-10-19,Customer payment,INV-1,,25.00,25.00', 'text/csv', cashA);
+      'Account Number,001235\nDate,Description,Reference,Debit,Credit,Balance\n2026-10-19,Customer payment,INV-1,,25.00,25.00', 'text/csv', cashA);
     expect(saved.rows[0].id).toMatch(/^[0-9a-f-]{36}$/);
     expect(await scalar('select count(*)::int as value from bank_transactions where bank_statement_id=$1', [saved.statementId])).toBe(1);
     const snapshot = await getReconciliationSnapshot(client, businessA);

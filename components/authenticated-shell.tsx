@@ -67,6 +67,7 @@ const navGroups: NavGroup[] = [
     title: 'Settings',
     items: [
       { href: '/settings/business', label: 'Business Profile' },
+      { href: '/accounts/financial', label: 'Bank Account Settings' },
       { href: '/settings/accounting', label: 'Accounting Settings' },
       { href: '/settings/accounting-rules', label: 'Accounting Rules' },
     ],

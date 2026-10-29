@@ -52,6 +52,9 @@ describe('financial account ui', () => {
     expect(screen.queryByRole('option',{name:/Inactive Ledger/})).toBeNull();
     fireEvent.change(screen.getByLabelText('COA mapping'), {target:{value:'ledger-1'}});
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Main Bank' } });
+    fireEvent.change(screen.getByLabelText('Bank name'), {target:{value:'Dummy Bank'}});
+    fireEvent.change(screen.getByLabelText('Company / account holder name'), {target:{value:'UAT Company'}});
+    fireEvent.change(screen.getByLabelText('Account number'), {target:{value:'001235'}});
     fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'MAIN-BANK' } });
     fireEvent.click(screen.getByRole('button', { name: /\+ Create Account/i }));
 
@@ -59,6 +62,7 @@ describe('financial account ui', () => {
     const post = fetchMock.mock.calls.find(call=>call[1]?.method==='POST')!;
     expect(post[0]).toBe('/api/financial-accounts');
     expect(JSON.parse(String(post[1]?.body))).toMatchObject({
+      bankName:'Dummy Bank',companyName:'UAT Company',accountNumber:'001235',
       accountId: 'ledger-1',
       businessId: 'business-1',
       name: 'Main Bank',

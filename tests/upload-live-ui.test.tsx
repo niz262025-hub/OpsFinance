@@ -58,3 +58,19 @@ it('requires an explicit eligible account, sends the selected second account, an
   expect((screen.getByRole('button',{name:'Approve and post'}) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.queryByText('Imported rows')).toBeNull();
 });
+
+it('shows an import-cancelled popup and prevents approval after server account mismatch',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async(url)=>({ok:!String(url).includes('/api/upload'),json:async()=>String(url).startsWith('/api/accounts')
+    ? {accounts:[]}
+    : String(url).startsWith('/api/financial-accounts') ? {financialAccounts:[{id:'bank1',account_code:'B1',name:'Bank One',status:'ACTIVE',account_id:'ledger1'}]}
+    : {error:'Wrong account uploaded. The statement account number does not match the selected account. Import cancelled.'}})));
+  render(<UploadWorkflow businessId="business-1"/>);
+  await screen.findByRole('option',{name:'B1 - Bank One'});
+  fireEvent.change(screen.getByLabelText('Bank or financial account'),{target:{value:'bank1'}});
+  fireEvent.change(screen.getByLabelText('Preview content'),{target:{value:'Account Number,3450'}});
+  fireEvent.click(screen.getByRole('button',{name:'Parse & review'}));
+  await screen.findByRole('alertdialog',{name:'Import cancelled'});
+  expect((screen.getByRole('button',{name:'Approve and post'}) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button',{name:'Close'}));
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+});

@@ -17,9 +17,13 @@ type FinancialAccountRecord = {
   currency?: string;
   status?: string;
   opening_balance?: string;
+  opening_balance_date?: string | null;
   openingBalance?: string;
   account_id?: string | null;
   accountId?: string | null;
+  bank_name?: string | null;
+  company_name?: string | null;
+  account_number?: string | null;
 };
 
 const formatMoney = (value: string | number | undefined) => {
@@ -43,6 +47,7 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
     }
   }, []);
   const [form, setForm] = useState({
+    bankName: '', companyName: '', accountNumber: '',
     name: '',
     type: 'BANK',
     accountCode: '',
@@ -89,7 +94,8 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
 
   const resetForm = () => {
     setForm({
-      name: '',
+      bankName: '', companyName: '', accountNumber: '',
+    name: '',
       type: 'BANK',
       accountCode: '',
       currency: 'MYR',
@@ -113,6 +119,7 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
       setLoading(true);
       setError(null);
 
+      if (form.type === 'BANK' && (!form.bankName.trim() || !form.companyName.trim() || !form.accountNumber.trim())) throw new Error('Bank name, company/account holder name and account number are required.');
       if (!form.accountId) throw new Error('Select a ledger account before creating a financial account.');
       if (!form.name.trim()) {
         throw new Error('Account name is required.');
@@ -122,10 +129,12 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
       }
 
       const response = await fetch('/api/financial-accounts', {
-        method: 'POST',
+        method: isEditing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           businessId,
+          id: isEditing ? selectedId : undefined,
+          bankName: form.bankName, companyName: form.companyName, accountNumber: form.accountNumber,
           name: form.name,
           type: form.type,
           accountCode: form.accountCode,
@@ -181,7 +190,7 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
 
         <section ref={formRef} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1rem', display: 'grid', gap: '0.8rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <h2 style={{ margin: 0 }}>Create new account</h2>
+            <h2 style={{ margin: 0 }}>{isEditing ? 'Edit account' : 'Create new account'}</h2>
             <button type="button" onClick={() => resetForm()} style={{ background: '#e2e8f0', color: '#0f172a', border: 'none', borderRadius: 10, padding: '0.6rem 0.9rem', fontWeight: 700, cursor: 'pointer' }}>Clear</button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem' }}>
@@ -191,12 +200,18 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
             <label style={{ display: 'grid', gap: '0.25rem' }}>Currency<input value={form.currency} onChange={(event) => setForm((current) => ({ ...current, currency: event.target.value.toUpperCase() }))} /></label>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+            <label>Bank name<input value={form.bankName} onChange={(event) => setForm(current => ({...current,bankName:event.target.value}))} /></label>
+            <label>Company / account holder name<input value={form.companyName} onChange={(event) => setForm(current => ({...current,companyName:event.target.value}))} /></label>
+            <label>Account number<input type="text" inputMode="numeric" autoComplete="off" value={form.accountNumber} onChange={(event) => setForm(current => ({...current,accountNumber:event.target.value}))} /></label>
+          </div>
+          <p>Use the full account number, including leading zeros. Statement imports require an exact account-number match.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
             <label style={{ display: 'grid', gap: '0.25rem' }}>COA mapping<select value={form.accountId} onChange={(event) => setForm((current) => ({ ...current, accountId: event.target.value }))}><option value="">Select a ledger account</option>{ledgerAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label>
-            <label style={{ display: 'grid', gap: '0.25rem' }}>Opening balance<input value={form.openingBalance} onChange={(event) => setForm((current) => ({ ...current, openingBalance: event.target.value }))} /></label>
-            <label style={{ display: 'grid', gap: '0.25rem' }}>Opening date<input type="date" value={form.openingBalanceDate} onChange={(event) => setForm((current) => ({ ...current, openingBalanceDate: event.target.value }))} /></label>
+            <label style={{ display: 'grid', gap: '0.25rem' }}>Opening balance<input disabled={isEditing} value={form.openingBalance} onChange={(event) => setForm((current) => ({ ...current, openingBalance: event.target.value }))} /></label>
+            <label style={{ display: 'grid', gap: '0.25rem' }}>Opening date<input disabled={isEditing} type="date" value={form.openingBalanceDate} onChange={(event) => setForm((current) => ({ ...current, openingBalanceDate: event.target.value }))} /></label>
             <label style={{ display: 'grid', gap: '0.25rem' }}>Status<select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></label>
           </div>
-          <button type="button" onClick={() => void handleCreate()} style={{ width: 'fit-content', background: '#0f172a', color: '#fff', border: 'none', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}>+ Create Account</button>
+          <button type="button" disabled={loading} onClick={() => void handleCreate()} style={{ width: 'fit-content', background: '#0f172a', color: '#fff', border: 'none', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}>{isEditing ? 'Save account' : '+ Create Account'}</button>
         </section>
 
         {error ? <div role="alert" style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 18, padding: '1rem' }}>{error}</div> : null}
@@ -205,7 +220,7 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
           {loading ? <div>Loading financial accounts…</div> : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Name</th><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Type</th><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Code</th><th style={{ textAlign: 'right', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Opening balance</th><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Status</th></tr>
+                <tr><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Name</th><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Type</th><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Code</th><th style={{ textAlign: 'right', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Opening balance</th><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Status</th><th>Bank details</th><th>Action</th></tr>
               </thead>
               <tbody>
                 {accounts.map((account) => (
@@ -215,6 +230,11 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
                     <td style={{ padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{account.account_code ?? account.accountCode ?? '-'}</td>
                     <td style={{ textAlign: 'right', padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{formatMoney(account.opening_balance ?? account.openingBalance ?? '0.00')}</td>
                     <td style={{ padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{account.status ?? 'ACTIVE'}</td>
+                    <td>{account.bank_name ?? '-'} · {account.company_name ?? '-'} · {account.account_number ? `••••${account.account_number.slice(-4)}` : 'Account number not set'}</td>
+                    <td><button type="button" disabled={loading} onClick={() => {
+                      setSelectedId(account.id); setIsEditing(true); setError(null);
+                      setForm({name:account.name,type:account.type,accountCode:account.account_code ?? account.accountCode ?? '',currency:account.currency ?? 'MYR',accountId:account.account_id ?? account.accountId ?? '',openingBalance:String(account.opening_balance ?? account.openingBalance ?? '0'),openingBalanceDate:account.opening_balance_date ?? '',status:account.status ?? 'ACTIVE',bankName:account.bank_name ?? '',companyName:account.company_name ?? '',accountNumber:account.account_number ?? ''});
+                    }}>Edit {account.name}</button></td>
                   </tr>
                 ))}
               </tbody>
