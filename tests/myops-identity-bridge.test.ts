@@ -48,6 +48,9 @@ describe('MYOPS identity to RLS-user bridge',()=>{
   const session:AppSession={version:1,sessionId,userRef:'u'.repeat(43),userId,businessId,accessToken:'user-jwt',expiresAt:Date.now()+60000};
   mocks.cookies.mockResolvedValue({get:()=>({value:sealSession(session,'k'.repeat(48))})});
   expect((await verifiedMyopsClient()).user.id).toBe(userId);
+  expect(mocks.check).toHaveBeenCalledWith(expect.anything(),sessionId,false);
+  await verifiedMyopsClient(true);
+  expect(mocks.check).toHaveBeenLastCalledWith(expect.anything(),sessionId,true);
   expect(mocks.create).toHaveBeenCalledWith('https://database.example','public-key',expect.objectContaining({global:{headers:{Authorization:'Bearer user-jwt'}}}));
   mapping.maybeSingle.mockResolvedValue({data:{supabase_user_id:businessId,business_id:businessId},error:null});
   await expect(verifiedMyopsClient()).rejects.toThrow('Identity mapping revoked.');

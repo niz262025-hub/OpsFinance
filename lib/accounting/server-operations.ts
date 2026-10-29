@@ -1,3 +1,4 @@
+import { verifyStatementAccount, normalizeAccountNumber } from './statement-account';
 import { parseCsvRow, validateCsvBankStatement } from '@/packages/csv-import';
 
 export type UnifiedBankRow = {
@@ -260,8 +261,12 @@ export async function persistBankStatementImport(
     throw new Error('Unsupported upload format. CSV and TXT bank statements are supported.');
   }
 
-  const rows = normalizeBankCsvRows(content);
   const resolvedFinancialAccountId = await resolveFinancialAccountId(supabase, businessId, financialAccountId);
+  const { data: selectedAccount, error: selectedAccountError } = await supabase.from('financial_accounts')
+    .select('account_number').eq('business_id', businessId).eq('id', resolvedFinancialAccountId).maybeSingle();
+  if (selectedAccountError) throw new Error('Unable to verify the selected account.');
+  const verifiedStatement = verifyStatementAccount(content, selectedAccount?.account_number);
+  const rows = normalizeBankCsvRows(verifiedStatement.csv);
   const statementId = crypto.randomUUID();
   const now = new Date().toISOString();
 
@@ -269,6 +274,7 @@ export async function persistBankStatementImport(
     id: statementId,
     business_id: businessId,
     financial_account_id: resolvedFinancialAccountId,
+    verified_account_number: verifiedStatement.accountNumber,
     file_name: fileName,
     file_type: fileType,
     statement_start_date: rows[0]?.date ? rows[0].date : null,
@@ -343,7 +349,7 @@ export async function postApprovedBankImport(
 
   const statementQuery = await supabase
     .from('bank_statements')
-    .select('id, business_id, status, financial_account_id')
+    .select('id, business_id, status, financial_account_id, verified_account_number')
     .eq('id', statementId)
     .eq('business_id', businessId)
     .maybeSingle();
@@ -376,8 +382,12 @@ export async function postApprovedBankImport(
   }
 
   const { data: bankAccount, error: bankAccountError } = await supabase.from('financial_accounts')
-    .select('account_id').eq('business_id', businessId).eq('id', statementQuery.data.financial_account_id).maybeSingle();
+    .select('account_id, account_number').eq('business_id', businessId).eq('id', statementQuery.data.financial_account_id).maybeSingle();
   if (bankAccountError || !bankAccount?.account_id) throw new Error('The selected bank account needs a chart-of-accounts mapping.');
+  if (!statementQuery.data.verified_account_number || !bankAccount.account_number
+      || normalizeAccountNumber(bankAccount.account_number) !== statementQuery.data.verified_account_number) {
+    throw new Error('Account verification changed or is missing. Import and verify the statement again before posting.');
+  }
   const cashAccountId = bankAccount.account_id;
   if (cashAccountId === accountId) throw new Error('Choose a posting account different from the bank account.');
   const { data: bankRows = [], error: bankRowError } = await supabase
@@ -489,13 +499,17 @@ export async function getReconciliationSnapshot(
   if (statementError) throw new Error(statementError.message ?? 'Unable to load bank statements.');
 
   const statementIds = statements.map((statement: any) => statement.id);
-  const [{ data: bankTransactions = [] }, { data: bookTransactions = [] }, { data: matches = [] }] = await Promise.all([
+  const snapshotResults = await Promise.all([
     supabase.from('bank_transactions').select('*').in('bank_statement_id', statementIds),
     supabase.from('transactions').select('*').eq('business_id', businessId).eq('status', 'POSTED').order('transaction_date', { ascending: false }),
     supabase.from('reconciliation_matches').select('*').eq('business_id', businessId),
   ]);
+  for (const result of snapshotResults) {
+    if (result.error) throw new Error(result.error.message ?? 'Unable to load reconciliation data.');
+  }
+  const [{data: bankTransactions = []}, {data: bookTransactions = []}, {data: matches = []}] = snapshotResults;
 
-  const unmatchedBank = (bankTransactions as any[]).filter((transaction: any) => transaction.status !== 'MATCHED' && transaction.status !== 'PARTIAL').length;
+  const unmatchedBank = (bankTransactions as any[]).filter((transaction: any) => transaction.status !== 'MATCHED').length;
   const matched = (matches as any[]).length;
   const summary = {
     matched,

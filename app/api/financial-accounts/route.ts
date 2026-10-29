@@ -1,3 +1,4 @@
+import { normalizeAccountNumber } from '@/lib/accounting/statement-account';
 import { NextResponse } from 'next/server';
 
 import { resolveAuthorizedBusinessId } from '@/lib/auth/business';
@@ -80,7 +81,14 @@ function validateFinancialAccountPayload(payload: Record<string, unknown>, exist
     throw new Error('Financial account code is required.');
   }
 
+  const bankName = String(payload.bankName ?? existing?.bank_name ?? '').trim();
+  const companyName = String(payload.companyName ?? existing?.company_name ?? '').trim();
+  const rawNumber = String(payload.accountNumber ?? existing?.account_number ?? '').trim();
+  const accountNumber = rawNumber ? normalizeAccountNumber(rawNumber) : null;
+  if (type === 'BANK' && (!bankName || !companyName || !accountNumber)) throw new Error('Bank name, company/account holder name and full account number are required.');
+  if (bankName.length > 150 || companyName.length > 200) throw new Error('Bank or company name is too long.');
   return {
+    bankName, companyName, accountNumber,
     name,
     type,
     accountCode,
@@ -238,6 +246,9 @@ export async function POST(request: Request) {
       .from('financial_accounts')
       .insert({
         business_id: businessId,
+        bank_name: validation.bankName || null,
+        company_name: validation.companyName || null,
+        account_number: validation.accountNumber,
         name: validation.name,
         type: validation.type,
         account_code: validation.accountCode,
@@ -326,6 +337,9 @@ export async function PUT(request: Request) {
     const { data, error } = await supabase
       .from('financial_accounts')
       .update({
+        bank_name: validation.bankName || null,
+        company_name: validation.companyName || null,
+        account_number: validation.accountNumber,
         name: validation.name,
         type: validation.type,
         account_code: validation.accountCode,

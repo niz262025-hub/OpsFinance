@@ -43,18 +43,22 @@ export async function establishMyopsSession(ticket: string): Promise<AppSession>
   return {version:1, sessionId:grant.session_id,userRef:grant.user_ref,userId:user.id,businessId:mapping.business_id,
     accessToken:data.session.access_token,expiresAt:Math.min(data.session.expires_at*1000,Date.now()+grant.max_session_seconds*1000)};
 }
-export async function verifiedMyopsClient() {
+export async function verifiedMyopsClient(activity = false) {
   const config = ssoConfig();
   const session = openSession((await cookies()).get(MYOPS_COOKIE)?.value,config.secret);
   if (!session) throw new Error('MYOPS authentication required.');
-  await checkMyopsEntitlement(config.transport,session.sessionId,true);
-  const { url,key,mapping } = await mappedIdentity(session.userRef);
+  const [, { url,key,mapping }] = await Promise.all([
+    checkMyopsEntitlement(config.transport,session.sessionId,activity),
+    mappedIdentity(session.userRef),
+  ]);
   if (mapping.supabase_user_id !== session.userId || mapping.business_id !== session.businessId) throw new Error('Identity mapping revoked.');
   const client = createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{...myopsBrokerHeaders(),Authorization:`Bearer ${session.accessToken}`}}});
-  const { data, error } = await client.auth.getUser(session.accessToken);
-  if (error || data.user.id !== session.userId) throw new Error('Local identity is no longer valid.');
-  const { data: member,error: memberError } = await client.from('business_members').select('business_id')
-    .eq('user_id',session.userId).eq('business_id',session.businessId).maybeSingle();
+  const [{ data, error }, { data: member,error: memberError }] = await Promise.all([
+    client.auth.getUser(session.accessToken),
+    client.from('business_members').select('business_id')
+      .eq('user_id',session.userId).eq('business_id',session.businessId).maybeSingle(),
+  ]);
+  if (error || data.user?.id !== session.userId) throw new Error('Local identity is no longer valid.');
   if (memberError || !member) throw new Error('Business membership revoked.');
   // Existing server pages call auth.getUser() without passing a token.
   client.auth.getUser = async () => ({ data:{user:data.user},error:null });

@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 
+import { trackUserActivity } from '../lib/auth/user-activity';
+
 import { isPreviewAuthBypassEnabled } from '../lib/auth/navigation';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
@@ -65,6 +67,7 @@ const navGroups: NavGroup[] = [
     title: 'Settings',
     items: [
       { href: '/settings/business', label: 'Business Profile' },
+      { href: '/accounts/financial', label: 'Bank Account Settings' },
       { href: '/settings/accounting', label: 'Accounting Settings' },
       { href: '/settings/accounting-rules', label: 'Accounting Rules' },
     ],
@@ -102,12 +105,33 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [idleExpired, setIdleExpired] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth > 900) {
       setMobileOpen(false);
     }
   }, [pathname]);
+
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED !== 'true') return;
+    return trackUserActivity(document,
+      () => fetch('/api/myops/activity', {method:'POST',credentials:'same-origin',cache:'no-store'}),
+      Date.now,
+      () => {
+        setIdleExpired(true);
+        void (async () => {
+          try {
+            const response = await fetch('/api/myops/logout', {method:'POST',credentials:'same-origin',
+              headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'inactivity'}),
+              signal:AbortSignal.timeout(10000)});
+            if (!response.ok) throw new Error('Session cleanup unavailable.');
+            const result = await response.json();
+            window.location.replace(typeof result.next === 'string' ? result.next : '/login');
+          } catch { window.location.replace('/login'); }
+        })();
+      });
+  }, []);
 
   const signOut = async () => {
     if (process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED === 'true') {
@@ -122,6 +146,8 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
     }
     router.push(isPreviewAuthBypassEnabled() ? '/dashboard' : '/login');
   };
+
+  if (idleExpired) return <main role="status">Session expired. Returning to MYOPS login…</main>;
 
   return (
     <div className="opsfinance-app-shell">
