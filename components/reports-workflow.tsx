@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { reportCsv } from '../lib/report-csv';
 
 import { isPreviewAuthBypassEnabled } from '../lib/auth/navigation';
 import { PREVIEW_BUSINESS_ID, getPreviewFinancialSnapshot, getPreviewReportRepository } from '../lib/preview-data';
@@ -230,6 +231,14 @@ export function ReportsWorkflow({ businessId, businessContextError, defaultRepor
           <div>
             <p style={{ margin: 0, color: '#475569', letterSpacing: '0.08em', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>OpsFinance</p>
             <h1 style={{ margin: '0.35rem 0 0' }}>Financial Reports</h1>
+            <button type="button" className="opsfinance-secondary-button" disabled={loading || !rowData} onClick={() => {
+              if (loading || !rowData) return;
+              const csv = reportCsv(rowData, {report: buttonLabels[report], business: businessId, from: dateFrom, to: dateTo});
+              const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+              const link = document.createElement('a');
+              link.href = url; link.download = `opsfinance-${report}-${dateFrom}-${dateTo}.csv`;
+              link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }}>Export CSV</button>
           </div>
         </header>
 

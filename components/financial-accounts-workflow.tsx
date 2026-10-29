@@ -32,6 +32,7 @@ const formatMoney = (value: string | number | undefined) => {
 
 export function FinancialAccountsWorkflow({ businessId, businessContextError }: FinancialAccountsWorkflowProps) {
   const [accounts, setAccounts] = useState<FinancialAccountRecord[]>([]);
+  const [ledgerAccounts, setLedgerAccounts] = useState<Array<{id: string; code: string; name: string; is_active: boolean}>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -62,8 +63,13 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
     setError(null);
 
     try {
-      const response = await fetch(`/api/financial-accounts?businessId=${encodeURIComponent(businessId)}`);
-      const payload = await response.json();
+      const [response, ledgerResponse] = await Promise.all([
+        fetch(`/api/financial-accounts?businessId=${encodeURIComponent(businessId)}`),
+        fetch(`/api/accounts?businessId=${encodeURIComponent(businessId)}`),
+      ]);
+      const [payload, ledgerPayload] = await Promise.all([response.json(), ledgerResponse.json()]);
+      if (!ledgerResponse.ok) throw new Error(ledgerPayload.error ?? 'Could not load ledger accounts.');
+      setLedgerAccounts((ledgerPayload.accounts ?? []).filter((account: {is_active: boolean}) => account.is_active));
 
       if (!response.ok) {
         throw new Error(payload.error ?? 'Could not load financial accounts.');
@@ -107,6 +113,7 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
       setLoading(true);
       setError(null);
 
+      if (!form.accountId) throw new Error('Select a ledger account before creating a financial account.');
       if (!form.name.trim()) {
         throw new Error('Account name is required.');
       }
@@ -184,7 +191,7 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
             <label style={{ display: 'grid', gap: '0.25rem' }}>Currency<input value={form.currency} onChange={(event) => setForm((current) => ({ ...current, currency: event.target.value.toUpperCase() }))} /></label>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
-            <label style={{ display: 'grid', gap: '0.25rem' }}>COA mapping<input value={form.accountId} onChange={(event) => setForm((current) => ({ ...current, accountId: event.target.value }))} /></label>
+            <label style={{ display: 'grid', gap: '0.25rem' }}>COA mapping<select value={form.accountId} onChange={(event) => setForm((current) => ({ ...current, accountId: event.target.value }))}><option value="">Select a ledger account</option>{ledgerAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label>
             <label style={{ display: 'grid', gap: '0.25rem' }}>Opening balance<input value={form.openingBalance} onChange={(event) => setForm((current) => ({ ...current, openingBalance: event.target.value }))} /></label>
             <label style={{ display: 'grid', gap: '0.25rem' }}>Opening date<input type="date" value={form.openingBalanceDate} onChange={(event) => setForm((current) => ({ ...current, openingBalanceDate: event.target.value }))} /></label>
             <label style={{ display: 'grid', gap: '0.25rem' }}>Status<select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></label>

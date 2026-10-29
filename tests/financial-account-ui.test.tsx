@@ -33,21 +33,14 @@ describe('financial account ui', () => {
   });
 
   it('renders the create account action and submits an account creation request', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ financialAccounts: [] }) })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          financialAccount: {
-            id: 'fa-123',
-            name: 'Main Bank',
-            account_code: 'MAIN-BANK',
-            type: 'BANK',
-            currency: 'MYR',
-            status: 'ACTIVE',
-          },
-        }),
-      });
+    const fetchMock = vi.fn(async (url, init) => {
+      if (String(url).startsWith('/api/accounts?')) return {ok:true,json:async()=>({accounts:[
+        {id:'ledger-1',code:'1000',name:'Main Cash Ledger',is_active:true},
+        {id:'inactive-ledger',code:'9999',name:'Inactive Ledger',is_active:false},
+      ]})};
+      if (init?.method === 'POST') return {ok:true,json:async()=>({financialAccount:{id:'fa-123',name:'Main Bank',account_code:'MAIN-BANK',type:'BANK',currency:'MYR',status:'ACTIVE'}})};
+      return {ok:true,json:async()=>({financialAccounts:[]})};
+    });
 
     vi.stubGlobal('fetch', fetchMock);
 
@@ -55,14 +48,18 @@ describe('financial account ui', () => {
 
     expect(await screen.findByRole('button', { name: /\+ Create Account/i })).toBeTruthy();
 
+    await screen.findByRole('option', {name:'1000 — Main Cash Ledger'});
+    expect(screen.queryByRole('option',{name:/Inactive Ledger/})).toBeNull();
+    fireEvent.change(screen.getByLabelText('COA mapping'), {target:{value:'ledger-1'}});
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Main Bank' } });
     fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'MAIN-BANK' } });
     fireEvent.click(screen.getByRole('button', { name: /\+ Create Account/i }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/financial-accounts');
-    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: 'POST' });
-    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toMatchObject({
+    await waitFor(() => expect(fetchMock.mock.calls.some(call=>call[1]?.method==='POST')).toBe(true));
+    const post = fetchMock.mock.calls.find(call=>call[1]?.method==='POST')!;
+    expect(post[0]).toBe('/api/financial-accounts');
+    expect(JSON.parse(String(post[1]?.body))).toMatchObject({
+      accountId: 'ledger-1',
       businessId: 'business-1',
       name: 'Main Bank',
       accountCode: 'MAIN-BANK',
