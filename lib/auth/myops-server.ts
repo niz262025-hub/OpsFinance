@@ -43,12 +43,12 @@ export async function establishMyopsSession(ticket: string): Promise<AppSession>
   return {version:1, sessionId:grant.session_id,userRef:grant.user_ref,userId:user.id,businessId:mapping.business_id,
     accessToken:data.session.access_token,expiresAt:Math.min(data.session.expires_at*1000,Date.now()+grant.max_session_seconds*1000)};
 }
-export async function verifiedMyopsClient() {
+export async function verifiedMyopsClient(activity = false) {
   const config = ssoConfig();
   const session = openSession((await cookies()).get(MYOPS_COOKIE)?.value,config.secret);
   if (!session) throw new Error('MYOPS authentication required.');
   const [, { url,key,mapping }] = await Promise.all([
-    checkMyopsEntitlement(config.transport,session.sessionId,true),
+    checkMyopsEntitlement(config.transport,session.sessionId,activity),
     mappedIdentity(session.userRef),
   ]);
   if (mapping.supabase_user_id !== session.userId || mapping.business_id !== session.businessId) throw new Error('Identity mapping revoked.');

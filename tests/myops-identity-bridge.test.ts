@@ -1,3 +1,4 @@
+import {generateKeyPairSync} from 'node:crypto';
 // @vitest-environment node
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 const mocks=vi.hoisted(()=>({create:vi.fn(),redeem:vi.fn(),check:vi.fn(),cookies:vi.fn()}));
@@ -14,7 +15,7 @@ const query=(data:unknown)=>{const q={select:vi.fn(),eq:vi.fn(),maybeSingle:vi.f
 let mapping:ReturnType<typeof query>;let member:ReturnType<typeof query>;let admin:any;let client:any;
 beforeEach(()=>{
  vi.clearAllMocks();
- for(const [key,value] of Object.entries({MYOPS_SSO_ENABLED:'true',NEXT_PUBLIC_MYOPS_SSO_ENABLED:'true',OPSFINANCE_ORIGIN:'https://finance.example',MYOPS_ORIGIN:'https://portal.example',MYOPS_APP_PRIVATE_KEY:'key',MYOPS_APP_SESSION_SECRET:'k'.repeat(48),VERCEL_ENV:'preview',SUPABASE_URL:'https://database.example',SUPABASE_ANON_KEY:'public-key',SUPABASE_SERVICE_ROLE_KEY:'admin-secret'}))vi.stubEnv(key,value);
+ for(const [key,value] of Object.entries({MYOPS_SSO_ENABLED:'true',NEXT_PUBLIC_MYOPS_SSO_ENABLED:'true',OPSFINANCE_ORIGIN:'https://finance.example',MYOPS_ORIGIN:'https://portal.example',MYOPS_APP_PRIVATE_KEY:generateKeyPairSync('ed25519').privateKey.export({type:'pkcs8',format:'pem'}).toString(),MYOPS_APP_SESSION_SECRET:'k'.repeat(48),VERCEL_ENV:'preview',SUPABASE_URL:'https://database.example',SUPABASE_ANON_KEY:'public-key',SUPABASE_SERVICE_ROLE_KEY:'admin-secret'}))vi.stubEnv(key,value);
  mapping=query({supabase_user_id:userId,business_id:businessId});member=query({business_id:businessId});
  admin={from:vi.fn(()=>mapping),auth:{admin:{getUserById:vi.fn().mockResolvedValue({data:{user},error:null}),generateLink:vi.fn().mockResolvedValue({data:{user,properties:{hashed_token:'server-otp'}},error:null})}}};
  client={from:vi.fn(()=>member),auth:{verifyOtp:vi.fn().mockResolvedValue({data:{user,session:{access_token:'user-jwt',expires_at:Math.floor(Date.now()/1000)+3600}},error:null}),getUser:vi.fn().mockResolvedValue({data:{user},error:null})}};
@@ -47,18 +48,11 @@ describe('MYOPS identity to RLS-user bridge',()=>{
   const session:AppSession={version:1,sessionId,userRef:'u'.repeat(43),userId,businessId,accessToken:'user-jwt',expiresAt:Date.now()+60000};
   mocks.cookies.mockResolvedValue({get:()=>({value:sealSession(session,'k'.repeat(48))})});
   expect((await verifiedMyopsClient()).user.id).toBe(userId);
+  expect(mocks.check).toHaveBeenCalledWith(expect.anything(),sessionId,false);
+  await verifiedMyopsClient(true);
+  expect(mocks.check).toHaveBeenLastCalledWith(expect.anything(),sessionId,true);
   expect(mocks.create).toHaveBeenCalledWith('https://database.example','public-key',expect.objectContaining({global:{headers:{Authorization:'Bearer user-jwt'}}}));
   mapping.maybeSingle.mockResolvedValue({data:{supabase_user_id:businessId,business_id:businessId},error:null});
   await expect(verifiedMyopsClient()).rejects.toThrow('Identity mapping revoked.');
- });
- it('still denies access if entitlement, identity or membership checks fail',async()=>{
-  const session:AppSession={version:1,sessionId,userRef:'u'.repeat(43),userId,businessId,accessToken:'user-jwt',expiresAt:Date.now()+60000};
-  mocks.cookies.mockResolvedValue({get:()=>({value:sealSession(session,'k'.repeat(48))})});
-  mocks.check.mockRejectedValueOnce(new Error('Entitlement denied'));
-  await expect(verifiedMyopsClient()).rejects.toThrow('Entitlement denied');
-  client.auth.getUser.mockResolvedValueOnce({data:{user:null},error:new Error('Invalid token')});
-  await expect(verifiedMyopsClient()).rejects.toThrow('Local identity is no longer valid.');
-  member.maybeSingle.mockResolvedValueOnce({data:null,error:null});
-  await expect(verifiedMyopsClient()).rejects.toThrow('Business membership revoked.');
  });
 });

@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 
+import { trackUserActivity } from '../lib/auth/user-activity';
+
 import { isPreviewAuthBypassEnabled } from '../lib/auth/navigation';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
@@ -108,6 +110,11 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
       setMobileOpen(false);
     }
   }, [pathname]);
+
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED !== 'true') return;
+    return trackUserActivity(document, () => fetch('/api/myops/activity', {method:'POST',credentials:'same-origin',cache:'no-store'}));
+  }, []);
 
   const signOut = async () => {
     if (process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED === 'true') {
