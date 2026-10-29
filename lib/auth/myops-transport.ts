@@ -42,6 +42,10 @@ export function signMyopsRequest(config: MyopsTransportConfig, endpoint: 'redeem
   } };
 }
 
+// Cache only Vercel transport authentication, never user/session entitlement.
+// A warm instance shares one bootstrap for concurrent requests to the same portal.
+const previewCookies = new WeakMap<typeof fetch, Map<string, { expires: number; cookie: Promise<string> }>>();
+
 export async function requestMyops(config: MyopsTransportConfig, endpoint: 'redeem' | 'entitlement', body: unknown,
   transport: typeof fetch = fetch): Promise<unknown> {
   const request = signMyopsRequest(config, endpoint, body);
@@ -52,17 +56,31 @@ export async function requestMyops(config: MyopsTransportConfig, endpoint: 'rede
   const previewShare = process.env.MYOPS_STAGING_SHARE_TOKEN;
   if (process.env.VERCEL_ENV === 'preview' && previewShare && config.origin === process.env.MYOPS_ORIGIN) {
     if (!/^[A-Za-z0-9_-]{16,256}$/.test(previewShare)) throw new Error('Invalid staging access configuration.');
-    const bootstrapUrl = new URL(url);
-    bootstrapUrl.searchParams.set('_vercel_share', previewShare);
-    // Vercel exchanges the approved share link for an HttpOnly protection cookie.
-    // Do not follow its redirect or send the signed ticket during that exchange.
-    const bootstrap = await transport(bootstrapUrl.href, {method:'GET',redirect:'manual',cache:'no-store',signal:AbortSignal.timeout(20000)});
-    const location = bootstrap.headers.get('location');
-    const destination = location ? new URL(location,bootstrapUrl) : null;
-    const cookie = bootstrap.headers.getSetCookie().find(value=>value.startsWith('_vercel_jwt='))?.split(';')[0];
-    if (![302,303,307,308].includes(bootstrap.status) || !destination || destination.href!==url.href
-      || !cookie || !/^_vercel_jwt=[A-Za-z0-9._-]+$/.test(cookie)) throw new Error('MYOPS access could not be verified.');
-    headers.set('Cookie',cookie);
+    let entries = previewCookies.get(transport);
+    if (!entries) { entries = new Map(); previewCookies.set(transport, entries); }
+    const cacheKey = `${url.origin}:${createHash('sha256').update(previewShare).digest('hex')}`;
+    let entry = entries.get(cacheKey);
+    if (!entry || entry.expires <= Date.now()) {
+      // Keep the cache bounded when configuration changes on a warm instance.
+      entries.clear();
+      const cookiePromise = (async () => {
+        const bootstrapUrl = new URL(url);
+        bootstrapUrl.searchParams.set('_vercel_share', previewShare);
+        // Vercel exchanges the approved share link for an HttpOnly protection cookie.
+        // Do not follow its redirect or send the signed ticket during that exchange.
+        const bootstrap = await transport(bootstrapUrl.href, {method:'GET',redirect:'manual',cache:'no-store',signal:AbortSignal.timeout(20000)});
+        const location = bootstrap.headers.get('location');
+        const destination = location ? new URL(location,bootstrapUrl) : null;
+        const cookie = bootstrap.headers.getSetCookie().find(value=>value.startsWith('_vercel_jwt='))?.split(';')[0];
+        if (![302,303,307,308].includes(bootstrap.status) || !destination || destination.href!==url.href
+          || !cookie || !/^_vercel_jwt=[A-Za-z0-9._-]+$/.test(cookie)) throw new Error('MYOPS access could not be verified.');
+        return cookie;
+      })();
+      entry = { expires: Date.now() + 30000, cookie: cookiePromise };
+      entries.set(cacheKey, entry);
+      cookiePromise.catch(() => { if (entries!.get(cacheKey) === entry) entries!.delete(cacheKey); });
+    }
+    headers.set('Cookie', await entry.cookie);
   }
   let response: Response;
   try {
@@ -75,6 +93,7 @@ export async function requestMyops(config: MyopsTransportConfig, endpoint: 'rede
   }
   // Do not propagate upstream errors, credentials, tickets or response bodies into logs/UI.
   if (!response.ok) {
+    previewCookies.get(transport)?.clear();
     if (process.env.VERCEL_ENV === 'preview') console.warn('myops_preview_transport_failed','http',response.status);
     throw new Error('MYOPS access could not be verified.');
   }

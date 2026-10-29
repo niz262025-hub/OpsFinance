@@ -6,9 +6,26 @@ import { canonicalJson, checkMyopsEntitlement, redeemMyopsTicket, requestMyops, 
 const pair = generateKeyPairSync('ed25519');
 const config = { origin: 'https://myops.example', appId: 'opsfinance', keyVersion: 'current' as const,
   privateKey: pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString() };
-afterEach(()=>vi.unstubAllEnvs());
+afterEach(()=>{vi.unstubAllEnvs();vi.restoreAllMocks();});
 
 describe('MYOPS signed server transport', () => {
+  it('shares preview bootstrap across concurrent operations but checks entitlement every time and expires transport reuse', async () => {
+    vi.stubEnv('MYOPS_STAGING_SHARE_TOKEN','s'.repeat(32));
+    vi.stubEnv('MYOPS_ORIGIN',config.origin);vi.stubEnv('VERCEL_ENV','preview');
+    let now=1793000000000;vi.spyOn(Date,'now').mockImplementation(()=>now);
+    const transport=vi.fn().mockImplementation(async(url,init)=>init.method==='GET'
+      ? new Response(null,{status:307,headers:{location:new URL(url).pathname,'Set-Cookie':'_vercel_jwt=preview-auth; HttpOnly; Secure'}})
+      : new Response(JSON.stringify({entitled:true,session_active:true}),{status:200}));
+    const id='c08f2182-2a66-4fc9-bbe6-02a21da4d759';
+    await Promise.all([checkMyopsEntitlement(config,id,false,transport),checkMyopsEntitlement(config,id,true,transport)]);
+    expect(transport.mock.calls.filter(c=>c[1].method==='GET')).toHaveLength(1);
+    expect(transport.mock.calls.filter(c=>c[1].method==='POST')).toHaveLength(2);
+    now+=30001;await checkMyopsEntitlement(config,id,false,transport);
+    expect(transport.mock.calls.filter(c=>c[1].method==='GET')).toHaveLength(2);
+    transport.mockImplementation(async()=>new Response('{}',{status:403}));
+    await expect(checkMyopsEntitlement(config,id,false,transport)).rejects.toThrow();
+  });
+
   it('limits temporary preview access to the configured portal and refuses production forwarding',async()=>{
     const transport=vi.fn().mockImplementation(async(_url,init)=>init.method==='GET'
       ? new Response(null,{status:307,headers:{location:config.origin+'/api/app/redeem','Set-Cookie':'_vercel_jwt=preview-auth; HttpOnly; Secure'}})
