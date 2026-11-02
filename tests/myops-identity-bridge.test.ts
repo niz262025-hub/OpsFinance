@@ -21,7 +21,7 @@ beforeEach(()=>{
  client={from:vi.fn(()=>member),auth:{verifyOtp:vi.fn().mockResolvedValue({data:{user,session:{access_token:'user-jwt',expires_at:Math.floor(Date.now()/1000)+3600}},error:null}),getUser:vi.fn().mockResolvedValue({data:{user},error:null})}};
  mocks.create.mockImplementation((_url,key)=>key==='admin-secret'?admin:client);
  mocks.redeem.mockResolvedValue({session_id:sessionId,user_ref:'u'.repeat(43),product:'opsfinance',max_session_seconds:43200});
- mocks.check.mockResolvedValue(undefined);
+ mocks.check.mockResolvedValue({mode:'paid'});
 });
 afterEach(()=>vi.unstubAllEnvs());
 describe('MYOPS identity to RLS-user bridge',()=>{

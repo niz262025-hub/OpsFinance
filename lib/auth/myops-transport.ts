@@ -1,3 +1,4 @@
+import { financeAccessFromEntitlement } from './myops-trial-policy';
 import { createHash, createPrivateKey, randomBytes, sign } from 'node:crypto';
 
 // Node server only. Never import this module into a client component or Edge middleware.
@@ -123,10 +124,11 @@ export async function redeemMyopsTicket(config: MyopsTransportConfig, ticket: st
 
 // Fresh, server-side check on each protected operation. A failed lookup never grants access.
 export async function checkMyopsEntitlement(config: MyopsTransportConfig, sessionId: string, activity: boolean,
-  transport: typeof fetch = fetch): Promise<void> {
+  transport: typeof fetch = fetch) {
   if (!UUID.test(sessionId)) throw new Error('Invalid application session.');
   const result = await requestMyops(config, 'entitlement', {
     session_id: sessionId, product: 'opsfinance', activity,
-  }, transport) as { entitled?: boolean; session_active?: boolean } | null;
-  if (result?.entitled !== true || result?.session_active !== true) throw new Error('MYOPS access denied.');
+  }, transport) as { entitled?: boolean; session_active?: boolean; access_mode?: unknown; trial?: unknown } | null;
+  // Remains closed until atomic database quota enforcement is integrated.
+  return financeAccessFromEntitlement(result, process.env.VERCEL_ENV === 'preview' && process.env.OPSFINANCE_TRIAL_POSTING_READY === 'true');
 }
