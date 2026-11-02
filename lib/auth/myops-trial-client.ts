@@ -20,8 +20,16 @@ export function installFinanceTrialClient(client:any,admin:any,access:FinanceAcc
   if(result.error)return {data:null,error:{message:result.error.message==='Finance trial usage limit reached'?'Trial limit reached: maximum 30 transactions. Upgrade in MYOPS to continue.':'Trial posting could not be completed. Check MYOPS and retry.'}};
   return result;
  };
- // Until upload/other adapters are integrated, no trial can reach raw paid writes.
+ // Basic account setup uses the existing authenticated user's RLS, never admin.
+ // Opening balances require atomic journal+quota support before enabling them.
  client.from=(table:string)=>new Proxy(originalFrom(table),{get(target,key,receiver){
+  if(key==='insert'&&['accounts','financial_accounts'].includes(table))return (payload:unknown,...args:unknown[])=>{
+   const rows=Array.isArray(payload)?payload:[payload];
+   if(!rows.length||rows.some(row=>!row||typeof row!=='object'||row.business_id!==businessId))throw new Error('Business access denied.');
+   if(table==='financial_accounts'&&rows.some(row=>!Number.isFinite(Number(row.opening_balance??0))||Number(row.opening_balance??0)!==0))throw new Error('Start trial bank accounts with a zero opening balance. Add balances through trial transactions.');
+   if(table==='accounts'&&rows.some(row=>row.is_system===true))throw new Error('System account creation is not available during your trial.');
+   return Reflect.get(target,'insert',target).call(target,payload,...args);
+  };
   if(['insert','update','upsert','delete'].includes(String(key)))return ()=>{throw new Error('This operation is not available during your trial. Manage access in MYOPS.');};
   const value=Reflect.get(target,key,receiver);return typeof value==='function'?value.bind(target):value;
  }});
