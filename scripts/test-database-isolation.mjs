@@ -88,6 +88,8 @@ console.log('PASS: secure business bootstrap creates owner membership without bi
 
 await db.exec(`reset role; insert into financial_accounts(id,business_id,name,type,account_code,account_number) values('aaaaaaaa-0000-4000-8000-000000000004','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','Trial bank','BANK','TRIALBANK','12345678')`);
 const importTrial='77777777-7777-4777-8777-777777777777';
+// Replay with the same non-superuser server role used by hosted Data API RPCs.
+await db.exec('set role service_role');
 const importStatement=(n,overrides={})=>{
  const sid=`88888888-8888-4888-8888-${String(n).padStart(12,'0')}`;
  const statement={id:sid,business_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',uploaded_by:'11111111-1111-1111-1111-111111111111',financial_account_id:'aaaaaaaa-0000-4000-8000-000000000004',verified_account_number:'12345678',file_name:'trial.csv',file_type:'text/csv',opening_balance:0,closing_balance:1,status:'IMPORTED'};
