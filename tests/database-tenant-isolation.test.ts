@@ -36,7 +36,7 @@ beforeAll(async () => {
   db = new PGlite({ extensions: { pgcrypto } });
   // Emulate Supabase roles and JWT subject; no remote database or credentials are used.
   await db.exec(`create role anon; create role authenticated; create role service_role nologin bypassrls; create schema auth;
-    create table auth.users(id uuid primary key);
+    create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_app_meta_data jsonb);
     create function auth.uid() returns uuid language sql stable as $$
       select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
     $$; grant usage on schema auth to authenticated, anon;

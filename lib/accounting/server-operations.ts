@@ -355,6 +355,8 @@ export async function postApprovedBankImport(
   accountId: string,
   transactionType: string = 'JOURNAL',
 ): Promise<{ posted: Array<{ id: string; amount: string; status: string }>; summary: { totalAmount: string; postedCount: number } }> {
+  // Trial statement uploads are previews; reject approval before any posting or status write.
+  assertFinanceFeature(supabase.myopsTrialAccess ?? {mode:'paid'}, 'reconciliation_commit');
   await assertBusinessMembership(supabase, userId, businessId);
 
   const statementQuery = await supabase

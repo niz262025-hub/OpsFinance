@@ -103,6 +103,7 @@ export async function requestMyops(config: MyopsTransportConfig, endpoint: 'rede
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export interface MyopsGrant {
+  onboarding_profile?: unknown;
   session_id: string;
   user_ref: string;
   product: 'opsfinance';

@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const db=new PGlite({extensions:{pgcrypto}});
 await db.exec(fs.readFileSync(root+'/scripts/local-supabase-emulator.sql','utf8'));
-await db.exec('create role service_role nologin bypassrls; create table auth.users(id uuid primary key)');
+await db.exec('create role service_role nologin bypassrls; create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_app_meta_data jsonb)');
 for(const file of fs.readdirSync(root+'/supabase/migrations').sort()) {
  try{await db.exec(fs.readFileSync(root+'/supabase/migrations/'+file,'utf8')); console.log('PASS replay',file)}catch(e){console.log('FAIL replay',file,e.message);process.exit(1)}
 }
