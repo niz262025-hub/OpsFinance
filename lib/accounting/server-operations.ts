@@ -1,3 +1,5 @@
+import { assertFinanceFeature } from '../auth/myops-trial-policy';
+import { createHash } from 'node:crypto';
 import { verifyStatementAccount, normalizeAccountNumber } from './statement-account';
 import { parseCsvRow, validateCsvBankStatement } from '@/packages/csv-import';
 
@@ -267,9 +269,17 @@ export async function persistBankStatementImport(
   if (selectedAccountError) throw new Error('Unable to verify the selected account.');
   const verifiedStatement = verifyStatementAccount(content, selectedAccount?.account_number);
   const rows = normalizeBankCsvRows(verifiedStatement.csv);
-  const statementId = crypto.randomUUID();
+  const contentHash=createHash('sha256').update(`${businessId}:${resolvedFinancialAccountId}:${verifiedStatement.csv}`).digest('hex');
+  const statementId = supabase.myopsTrialImport ? `${contentHash.slice(0,8)}-${contentHash.slice(8,12)}-4${contentHash.slice(13,16)}-8${contentHash.slice(17,20)}-${contentHash.slice(20,32)}` : crypto.randomUUID();
   const now = new Date().toISOString();
 
+  if(supabase.myopsTrialImport){
+    if(rows.length>30)throw new Error('Trial statements support up to 30 rows per file. Upgrade in MYOPS.');
+    const statement={id:statementId,business_id:businessId,financial_account_id:resolvedFinancialAccountId,verified_account_number:verifiedStatement.accountNumber,file_name:fileName,file_type:fileType,statement_start_date:rows[0]?.date??null,statement_end_date:rows[rows.length-1]?.date??null,opening_balance:'0.00',closing_balance:'0.00',status:'IMPORTED',uploaded_by:userId,created_at:now};
+    const bankRows=rows.map(row=>({id:row.id,bank_statement_id:statementId,transaction_date:row.date,description:row.description,reference:row.reference,amount:row.amount,debit:row.debit,credit:row.credit,running_balance:String(row.balance??'0.00'),normalized_description:row.description.toLowerCase(),status:'IMPORTED'}));
+    const result=await supabase.myopsTrialImport(statement,bankRows,contentHash);
+    return {statementId:result.statementId,rows,bankTransactions:result.bankTransactions};
+  }
   const { error: statementError } = await supabase.from('bank_statements').insert({
     id: statementId,
     business_id: businessId,
@@ -532,6 +542,7 @@ export async function createReconciliationMatch(
   transactionId: string,
   matchedAmount: string,
 ): Promise<{ matchId: string }> {
+  assertFinanceFeature(supabase.myopsTrialAccess??{mode:'paid'},'reconciliation_commit');
   await assertBusinessMembership(supabase, userId, businessId);
   const amountValue = assertValidMoney(matchedAmount, 'Matched amount');
 
@@ -617,6 +628,7 @@ export async function completeReconciliation(
   businessId: string,
   statementId: string,
 ): Promise<{ status: string }> {
+  assertFinanceFeature(supabase.myopsTrialAccess??{mode:'paid'},'reconciliation_commit');
   await assertBusinessMembership(supabase, userId, businessId);
 
   const { data: statement, error: statementError } = await supabase

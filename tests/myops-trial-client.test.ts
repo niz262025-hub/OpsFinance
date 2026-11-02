@@ -25,3 +25,12 @@ it('preserves paid client and sanitizes trial database errors',async()=>{
  admin.rpc.mockResolvedValue({error:{message:'Finance trial usage limit reached'}});
  expect((await client.rpc('post_accounting_transaction_atomic',{p_business_id:'b'})).error.message).toContain('Upgrade in MYOPS');
 });
+it('binds atomic statement imports to the verified server identity and safely reports the two-file limit',async()=>{
+ const admin={rpc:vi.fn().mockResolvedValue({data:{statementId:'statement',bankTransactions:[]},error:null})};
+ const client:any={rpc:vi.fn(),from:vi.fn()};installFinanceTrialClient(client,admin,access,'u','b');
+ await client.myopsTrialImport({business_id:'b',uploaded_by:'u'},[],'hash');
+ expect(admin.rpc).toHaveBeenCalledWith('opsfinance_trial_import_statement',expect.objectContaining({p_user_id:'u',p_business_id:'b',p_trial_id:access.trialId}));
+ await expect(client.myopsTrialImport({business_id:'other',uploaded_by:'u'},[],'hash')).rejects.toThrow('Business access denied');
+ admin.rpc.mockResolvedValue({error:{message:'Finance trial usage limit reached'}});
+ await expect(client.myopsTrialImport({business_id:'b',uploaded_by:'u'},[],'hash')).rejects.toThrow('2 files');
+});

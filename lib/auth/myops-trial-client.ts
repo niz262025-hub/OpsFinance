@@ -2,6 +2,13 @@ import type {FinanceAccess} from './myops-trial-policy';
 /** Attach only after server-side MYOPS session, mapping and membership verification. */
 export function installFinanceTrialClient(client:any,admin:any,access:FinanceAccess,userId:string,businessId:string){
  if(access.mode!=='trial')return client;
+ Object.defineProperty(client,'myopsTrialAccess',{value:access});
+ client.myopsTrialImport=async(statement:Record<string,unknown>,rows:unknown[],contentHash:string)=>{
+  if(statement.business_id!==businessId||statement.uploaded_by!==userId)throw new Error('Business access denied.');
+  const result=await admin.rpc('opsfinance_trial_import_statement',{p_user_id:userId,p_business_id:businessId,p_trial_id:access.trialId,p_expires_at:access.expiresAt,p_statement:statement,p_rows:rows,p_content_hash:contentHash});
+  if(result.error)throw new Error(result.error.message==='Finance trial usage limit reached'?'Trial bank statement limit reached (2 files). Upgrade in MYOPS.':'Trial statement import could not be completed.');
+  return result.data;
+ };
  const originalRpc=client.rpc.bind(client), originalFrom=client.from.bind(client);
  client.rpc=async(name:string,payload:Record<string,unknown>={})=>{
   if(name==='get_accounting_idempotency')return originalRpc(name,payload);
