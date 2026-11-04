@@ -21,10 +21,16 @@ beforeEach(()=>{
  client={from:vi.fn(()=>member),auth:{verifyOtp:vi.fn().mockResolvedValue({data:{user,session:{access_token:'user-jwt',expires_at:Math.floor(Date.now()/1000)+3600}},error:null}),getUser:vi.fn().mockResolvedValue({data:{user},error:null})}};
  mocks.create.mockImplementation((_url,key)=>key==='admin-secret'?admin:client);
  mocks.redeem.mockResolvedValue({session_id:sessionId,user_ref:'u'.repeat(43),product:'opsfinance',max_session_seconds:43200});
- mocks.check.mockResolvedValue(undefined);
+ mocks.check.mockResolvedValue({mode:'paid'});
 });
 afterEach(()=>vi.unstubAllEnvs());
 describe('MYOPS identity to RLS-user bridge',()=>{
+ it('checks central access before looking up or provisioning a local identity',async()=>{
+  mocks.check.mockRejectedValue(new Error('MYOPS access denied.'));
+  await expect(establishMyopsSession('t'.repeat(43))).rejects.toThrow('MYOPS access denied');
+  expect(admin.from).not.toHaveBeenCalled();
+  expect(admin.auth.admin.generateLink).not.toHaveBeenCalled();
+ });
  it('only mints a session for the preprovisioned, confirmed identity and membership',async()=>{
   const session=await establishMyopsSession('t'.repeat(43));
   expect(mapping.eq).toHaveBeenCalledWith('user_ref','u'.repeat(43));expect(mapping.eq).toHaveBeenCalledWith('enabled',true);

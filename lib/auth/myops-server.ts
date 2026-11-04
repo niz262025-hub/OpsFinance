@@ -1,3 +1,5 @@
+import { installFinanceTrialClient } from './myops-trial-client';
+import { provisionFinanceIdentity } from './myops-provisioning';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { MYOPS_COOKIE, openSession, ssoConfig, type AppSession } from './myops-session';
@@ -11,10 +13,15 @@ function clients() {
   if (!url || !key || !adminKey) throw new Error('SSO identity bridge is not configured.');
   return { url, key, admin: createClient(url, adminKey, { auth: { persistSession: false, autoRefreshToken: false },global:{headers:myopsBrokerHeaders()} }) };
 }
-async function mappedIdentity(userRef: string) {
+async function mappedIdentity(userRef: string, onboardingProfile?: unknown) {
   const { url, key, admin } = clients();
-  const { data: mapping, error } = await admin.from('myops_identity_links')
+  const { data: existing, error } = await admin.from('myops_identity_links')
     .select('supabase_user_id,business_id').eq('user_ref', userRef).eq('enabled',true).maybeSingle();
+  let mapping=existing;
+  if(!error&&!mapping&&onboardingProfile!==undefined&&process.env.VERCEL_ENV==='preview'
+    &&process.env.OPSFINANCE_MYOPS_PROVISIONING_READY==='true') {
+    mapping=await provisionFinanceIdentity(admin,userRef,onboardingProfile);
+  }
   if (error || !mapping) {
     if (process.env.VERCEL_ENV === 'preview') console.warn('myops_identity_lookup_unavailable',
       error?.message === 'Invalid API key' ? 'invalid_api_key' : error?.code === '42501' ? 'database_access_denied' : error ? 'upstream' : 'mapping_missing');
@@ -25,12 +32,14 @@ async function mappedIdentity(userRef: string) {
 export async function establishMyopsSession(ticket: string): Promise<AppSession> {
   const config = ssoConfig();
   const grant = await redeemMyopsTicket(config.transport, ticket);
-  const { url, key, admin, mapping } = await mappedIdentity(grant.user_ref);
+  // Check access before provisioning or minting any local identity/session.
+  await checkMyopsEntitlement(config.transport,grant.session_id,true);
+  const { url, key, admin, mapping } = await mappedIdentity(grant.user_ref,grant.onboarding_profile);
   const { data: identity, error: identityError } = await admin.auth.admin.getUserById(mapping.supabase_user_id);
   const user = identity.user;
   if (identityError || !user?.email || !user.email_confirmed_at) throw new Error('Mapped identity is unavailable.');
   // Admin generates a server-only one-time proof for the explicitly provisioned identity.
-  // No email matching, account creation, browser OTP or service-role data client.
+  // No email matching, browser OTP or service-role data client.
   const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type:'magiclink', email:user.email });
   if (linkError || link.user?.id !== user.id || !link.properties?.hashed_token) throw new Error('Identity exchange failed.');
   const client = createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:myopsBrokerHeaders()}});
@@ -47,7 +56,7 @@ export async function verifiedMyopsClient(activity = false) {
   const config = ssoConfig();
   const session = openSession((await cookies()).get(MYOPS_COOKIE)?.value,config.secret);
   if (!session) throw new Error('MYOPS authentication required.');
-  const [, { url,key,mapping }] = await Promise.all([
+  const [access, { url,key,admin,mapping }] = await Promise.all([
     checkMyopsEntitlement(config.transport,session.sessionId,activity),
     mappedIdentity(session.userRef),
   ]);
@@ -63,5 +72,6 @@ export async function verifiedMyopsClient(activity = false) {
   // Existing server pages call auth.getUser() without passing a token.
   client.auth.getUser = async () => ({ data:{user:data.user},error:null });
   Object.defineProperty(client,'myopsBusinessId',{value:session.businessId});
-  return { client,session,user:data.user };
+  installFinanceTrialClient(client,admin,access,data.user.id,session.businessId);
+  return { client,session,user:data.user,access };
 }
