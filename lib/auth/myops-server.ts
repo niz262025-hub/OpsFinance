@@ -1,3 +1,4 @@
+import { installFinanceTrialClient } from './myops-trial-client';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { MYOPS_COOKIE, openSession, ssoConfig, type AppSession } from './myops-session';
@@ -47,7 +48,7 @@ export async function verifiedMyopsClient(activity = false) {
   const config = ssoConfig();
   const session = openSession((await cookies()).get(MYOPS_COOKIE)?.value,config.secret);
   if (!session) throw new Error('MYOPS authentication required.');
-  const [, { url,key,mapping }] = await Promise.all([
+  const [access, { url,key,admin,mapping }] = await Promise.all([
     checkMyopsEntitlement(config.transport,session.sessionId,activity),
     mappedIdentity(session.userRef),
   ]);
@@ -63,5 +64,6 @@ export async function verifiedMyopsClient(activity = false) {
   // Existing server pages call auth.getUser() without passing a token.
   client.auth.getUser = async () => ({ data:{user:data.user},error:null });
   Object.defineProperty(client,'myopsBusinessId',{value:session.businessId});
-  return { client,session,user:data.user };
+  installFinanceTrialClient(client,admin,access,data.user.id,session.businessId);
+  return { client,session,user:data.user,access };
 }

@@ -36,7 +36,7 @@ const formatMoney = (value: string | number | undefined) => {
 
 export function FinancialAccountsWorkflow({ businessId, businessContextError }: FinancialAccountsWorkflowProps) {
   const [accounts, setAccounts] = useState<FinancialAccountRecord[]>([]);
-  const [ledgerAccounts, setLedgerAccounts] = useState<Array<{id: string; code: string; name: string; is_active: boolean}>>([]);
+  const [ledgerAccounts, setLedgerAccounts] = useState<Array<{id: string; code: string; name: string; account_type: string; is_active: boolean}>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -74,19 +74,29 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
       ]);
       const [payload, ledgerPayload] = await Promise.all([response.json(), ledgerResponse.json()]);
       if (!ledgerResponse.ok) throw new Error(ledgerPayload.error ?? 'Could not load ledger accounts.');
-      setLedgerAccounts((ledgerPayload.accounts ?? []).filter((account: {is_active: boolean}) => account.is_active));
 
       if (!response.ok) {
         throw new Error(payload.error ?? 'Could not load financial accounts.');
       }
 
-      setAccounts(payload.financialAccounts ?? []);
+      const financialAccounts = payload.financialAccounts ?? [];
+      const currentAccount = financialAccounts.find((account: FinancialAccountRecord) => account.id === selectedId);
+      const currentLedgerId = currentAccount?.account_id ?? currentAccount?.accountId;
+      const linkedLedgerIds = new Set(financialAccounts
+        .filter((account: FinancialAccountRecord) => account.type === 'BANK' && account.id !== selectedId)
+        .map((account: FinancialAccountRecord) => account.account_id ?? account.accountId)
+        .filter(Boolean));
+      setLedgerAccounts((ledgerPayload.accounts ?? []).filter((account: {is_active: boolean; account_type: string; id: string}) =>
+        account.is_active
+        && (form.type !== 'BANK' || (account.account_type === 'ASSET' && (!linkedLedgerIds.has(account.id) || account.id === currentLedgerId))),
+      ));
+      setAccounts(financialAccounts);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Could not load financial accounts.');
     } finally {
       setLoading(false);
     }
-  }, [businessId]);
+  }, [businessId, form.type, selectedId]);
 
   useEffect(() => {
     void loadAccounts();
@@ -120,7 +130,6 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
       setError(null);
 
       if (form.type === 'BANK' && (!form.bankName.trim() || !form.companyName.trim() || !form.accountNumber.trim())) throw new Error('Bank name, company/account holder name and account number are required.');
-      if (!form.accountId) throw new Error('Select a ledger account before creating a financial account.');
       if (!form.name.trim()) {
         throw new Error('Account name is required.');
       }
@@ -206,7 +215,7 @@ export function FinancialAccountsWorkflow({ businessId, businessContextError }: 
           </div>
           <p>Use the full account number, including leading zeros. Statement imports require an exact account-number match.</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
-            <label style={{ display: 'grid', gap: '0.25rem' }}>COA mapping<select value={form.accountId} onChange={(event) => setForm((current) => ({ ...current, accountId: event.target.value }))}><option value="">Select a ledger account</option>{ledgerAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label>
+            <label style={{ display: 'grid', gap: '0.25rem' }}>COA mapping (optional)<select value={form.accountId} onChange={(event) => setForm((current) => ({ ...current, accountId: event.target.value }))}><option value="">{form.type === 'BANK' ? 'Create a bank ledger automatically' : 'No ledger mapping'}</option>{ledgerAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label>
             <label style={{ display: 'grid', gap: '0.25rem' }}>Opening balance<input disabled={isEditing} value={form.openingBalance} onChange={(event) => setForm((current) => ({ ...current, openingBalance: event.target.value }))} /></label>
             <label style={{ display: 'grid', gap: '0.25rem' }}>Opening date<input disabled={isEditing} type="date" value={form.openingBalanceDate} onChange={(event) => setForm((current) => ({ ...current, openingBalanceDate: event.target.value }))} /></label>
             <label style={{ display: 'grid', gap: '0.25rem' }}>Status<select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></label>

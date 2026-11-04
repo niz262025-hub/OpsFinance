@@ -99,7 +99,7 @@ describe('MYOPS response boundaries', () => {
       await expect(checkMyopsEntitlement(config, grant.session_id, false, response(data))).rejects.toThrow();
     }
     const transport = response({ entitled: true, session_active: true });
-    await expect(checkMyopsEntitlement(config, grant.session_id, false, transport)).resolves.toBeUndefined();
+    await expect(checkMyopsEntitlement(config, grant.session_id, false, transport)).resolves.toEqual({mode:'paid'});
     expect(JSON.parse(transport.mock.calls[0][1].body)).toEqual({ session_id: grant.session_id, product: 'opsfinance', activity: false });
   });
 });
