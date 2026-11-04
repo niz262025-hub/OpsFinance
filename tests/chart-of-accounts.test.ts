@@ -112,18 +112,28 @@ describe('chart of accounts service', () => {
     })).toThrow('account type');
   });
 
-  it('requires a valid normal balance for the account type', () => {
+  it('supports credit-normal contra assets and rejects invalid expense balances', () => {
     const engine = new AccountingEngine({
       businessId: 'business-7',
       accounts: [{ id: 'asset-root', businessId: 'business-7', code: '1000', name: 'Assets', accountType: 'ASSET', normalBalance: 'DEBIT', isSystem: true, isActive: true }],
     });
 
     const svc = new ChartOfAccountsService(engine);
+    const contraAsset = svc.createAccount({
+      businessId: 'business-7',
+      code: '1590',
+      name: 'Accumulated Depreciation',
+      accountType: 'ASSET',
+      normalBalance: 'CREDIT',
+      parentId: 'asset-root',
+      isActive: true,
+    });
+    expect(contraAsset.normalBalance).toBe('CREDIT');
     expect(() => svc.createAccount({
       businessId: 'business-7',
-      code: '1500',
-      name: 'Asset with bad balance',
-      accountType: 'ASSET',
+      code: '5100',
+      name: 'Expense with bad balance',
+      accountType: 'EXPENSE',
       normalBalance: 'CREDIT',
       isActive: true,
     })).toThrow('normal balance');
