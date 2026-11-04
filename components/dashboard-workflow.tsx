@@ -44,19 +44,26 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
 
       setLoading(true);
       try {
-        const [accountsResult, transactionsResult] = await Promise.all([
+        const [accountsResult, journalRows] = await Promise.all([
           client.from('accounts').select('*').eq('business_id', businessId).order('code', { ascending: true }),
-          client
-            .from('journal_entries')
-            .select('id, journal_no, journal_date, description, status, journal_lines(*)')
-            .eq('business_id', businessId)
-            .eq('status', 'POSTED')
-            .order('journal_date', { ascending: false })
-            .limit(6),
+          (async () => {
+            const rows: any[] = [];
+            const pageSize = 500;
+            for (let offset = 0; ; offset += pageSize) {
+              const page = await client.from('journal_entries')
+                .select('id, business_id, journal_no, journal_date, description, status, source_type, created_at, journal_lines(*)')
+                .eq('business_id', businessId).eq('status', 'POSTED')
+                .order('journal_date', { ascending: false })
+                .order('created_at', { ascending: false }).order('id', { ascending: false })
+                .range(offset, offset + pageSize - 1);
+              if (page.error) throw new Error(page.error.message);
+              rows.push(...(page.data ?? []));
+              if ((page.data ?? []).length < pageSize) return rows;
+            }
+          })(),
         ]);
 
         if (accountsResult.error) throw new Error(accountsResult.error.message);
-        if (transactionsResult.error) throw new Error(transactionsResult.error.message);
 
         const accounts = (accountsResult.data ?? []).map((row: any) => ({
           id: row.id,
@@ -76,7 +83,7 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
           repository: {
             getBusinessAccounts: () => accounts,
             getPostedJournals: () =>
-              (transactionsResult.data ?? []).map((row: any) => ({
+              journalRows.map((row: any) => ({
                 id: row.id,
                 businessId: row.business_id,
                 journalNo: row.journal_no,
@@ -122,12 +129,12 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
         ]);
         setBalances(balancesData);
         setRecentTransactions(
-          (transactionsResult.data ?? []).map((row: any) => ({
+          journalRows.slice(0, 6).map((row: any) => ({
             id: row.id,
             description: row.description ?? row.journal_no,
             status: row.status,
             referenceNo: row.journal_no,
-            amount: (row.journal_lines ?? []).reduce((sum: number, line: any) => sum + Number(line.debit ?? 0) - Number(line.credit ?? 0), 0).toFixed(2),
+            amount: (row.journal_lines ?? []).reduce((sum: number, line: any) => sum + Number(line.debit ?? 0), 0).toFixed(2),
             date: row.journal_date,
           })),
         );
