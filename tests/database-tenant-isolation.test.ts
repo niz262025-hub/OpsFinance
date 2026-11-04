@@ -16,6 +16,7 @@ let accountA: string;
 let accountB: string;
 let cashA: string;
 let cashB: string;
+let legacyPostedBankId: string;
 async function scalar(sql: string, params: any[] = []) {
   return (await db.query<any>(sql, params)).rows[0]?.value;
 }
@@ -44,19 +45,50 @@ beforeAll(async () => {
   const files = readdirSync('supabase/migrations').filter(f => f.endsWith('.sql')).sort();
   expect(new Set(files.map(f => f.split('_')[0])).size).toBe(files.length);
   for (const file of files) {
+    if (file === '019_default_coa_and_atomic_bank_accounts.sql') {
+      businessA = '20000000-0000-0000-0000-000000000001';
+      await db.exec(`insert into public.users(id,email,name) values
+        ('${userA}','a@example.test','A'),('${userB}','b@example.test','B');
+        insert into public.businesses(id,name) values ('${businessA}','Legacy A');
+        insert into public.business_members(business_id,user_id,role) values ('${businessA}','${userA}','OWNER');
+        insert into public.accounts(business_id,code,name,account_type,normal_balance)
+          values ('${businessA}','1000','Legacy Asset Root','ASSET','DEBIT');
+        insert into public.accounts(business_id,code,name,account_type,parent_id,normal_balance)
+          values ('${businessA}','1100','Legacy Cash','ASSET',
+            (select id from public.accounts where business_id='${businessA}' and code='1000'),'DEBIT');
+        insert into public.accounts(business_id,code,name,account_type,normal_balance)
+          values ('${businessA}','4000','Legacy Revenue','REVENUE','CREDIT');
+        insert into public.accounts(business_id,code,name,account_type,parent_id,normal_balance)
+          values ('${businessA}','4100','Legacy Sales','REVENUE',
+            (select id from public.accounts where business_id='${businessA}' and code='4000'),'CREDIT');
+        insert into public.financial_accounts(business_id,name,type,account_code)
+          values ('${businessA}','Legacy Bank','BANK','LEGACY-BANK'),
+            ('${businessA}','Legacy Posted Bank','BANK','LEGACY-POSTED-BANK');`);
+      legacyPostedBankId = await scalar("select id as value from public.financial_accounts where business_id=$1 and account_code='LEGACY-POSTED-BANK'", [businessA]);
+      const legacyCashId = await scalar("select id as value from public.accounts where business_id=$1 and code='1100'", [businessA]);
+      const legacyRevenueId = await scalar("select id as value from public.accounts where business_id=$1 and code='4100'", [businessA]);
+      await db.query("select set_config('request.jwt.claim.sub',$1,false)", [userA]);
+      await scalar(
+        `select public.post_accounting_transaction_atomic(
+          $1, 'legacy-history', 'MONEY_IN', '2026-10-19', 'Legacy opening activity',
+          'LEGACY-HISTORY', 25, $2, $3, 'LEGACY-JOURNAL', 'Legacy opening activity', $4::jsonb
+        ) as value`,
+        [businessA, legacyPostedBankId, legacyRevenueId, JSON.stringify([
+          { account_id: legacyCashId, financial_account_id: legacyPostedBankId, debit: 25, credit: 0 },
+          { account_id: legacyRevenueId, debit: 0, credit: 25 },
+        ])],
+      );
+    }
     const sql = readFileSync(`supabase/migrations/${file}`, 'utf8');
     try { await db.exec(sql); } catch (error) { throw new Error(`Migration ${file}: ${String(error)}`); }
   }
   await db.exec(`grant usage on schema public to authenticated, anon;
-    grant select, insert, update, delete on all tables in schema public to authenticated;
-    insert into public.users(id,email,name) values ('${userA}','a@example.test','A'),('${userB}','b@example.test','B');`);
-  await asUser(userA);
-  businessA = await scalar("select public.create_business_with_owner('A') as value");
+    grant select, insert, update, delete on all tables in schema public to authenticated;`);
   await asUser(userB);
   businessB = await scalar("select public.create_business_with_owner('B') as value");
   await db.exec('reset role');
   for (const business of [businessA, businessB]) {
-    const account = await scalar("insert into public.accounts(business_id,code,name,account_type,normal_balance) values ($1,'1000','Cash','ASSET','DEBIT') returning id as value", [business]);
+    const account = await scalar("select id as value from public.accounts where business_id=$1 and code='1110'", [business]);
     const cash = await scalar("insert into public.financial_accounts(business_id,name,type,account_code,account_id) values ($1,'Cash','CASH','CASH',$2) returning id as value", [business, account]);
     if (business === businessA) { accountA = account; cashA = cash; } else { accountB = account; cashB = cash; }
   }
@@ -64,6 +96,83 @@ beforeAll(async () => {
 afterAll(async () => { await db?.close(); });
 
 describe.sequential('PostgreSQL migration replay and tenant A/B boundaries', () => {
+  it('backfills partial businesses without replacing existing account codes', async () => {
+    await db.exec('reset role');
+    expect(await scalar("select name as value from public.accounts where business_id=$1 and code='1000'", [businessA])).toBe('Legacy Asset Root');
+    expect(await scalar("select name as value from public.accounts where business_id=$1 and code='1100'", [businessA])).toBe('Legacy Cash');
+    expect(await scalar("select count(*)::int as value from public.accounts where business_id=$1 and name='Cash' and is_system", [businessA])).toBe(1);
+    expect(await scalar("select count(*)::int as value from public.accounts where business_id=$1 and account_type='LIABILITY'", [businessA])).toBeGreaterThan(0);
+    expect(await scalar("select count(*)::int as value from public.accounts where business_id=$1 and name='Accumulated Depreciation' and account_type='ASSET' and normal_balance='CREDIT'", [businessA])).toBe(1);
+    expect(await scalar("select count(*)::int as value from public.financial_accounts where business_id=$1 and account_code='LEGACY-BANK' and account_id is not null", [businessA])).toBe(1);
+    expect(await scalar("select count(*)::int as value from public.financial_accounts where id=$1 and account_id is null", [legacyPostedBankId])).toBe(1);
+    expect(await scalar("select count(*)::int as value from public.journal_entries where business_id=$1", [businessA])).toBe(1);
+  });
+  it('seeds default COA groups and creates a bank ledger atomically and idempotently', async () => {
+    await asUser(userA);
+    for (const [code, type] of [['1000', 'ASSET'], ['2000', 'LIABILITY'], ['3000', 'EQUITY'], ['4000', 'REVENUE']] as const) {
+      expect(await scalar('select count(*)::int as value from public.accounts where business_id=$1 and code=$2 and account_type=$3', [businessA, code, type])).toBe(1);
+    }
+
+    const createBank = () => scalar(
+      `select public.create_financial_account_with_ledger(
+        $1, 'Operating Bank', 'BANK'::public.financial_account_type_enum, 'OPERATING-BANK',
+        'MYR', 'ACTIVE', 'Example Bank', 'Example Company', '001234', 0, '2026-10-19', null
+      ) as value`,
+      [businessA],
+    );
+    const first = await createBank();
+    const retry = await createBank();
+    expect(first.idempotent).toBe(false);
+    expect(retry.idempotent).toBe(true);
+    expect(retry.financialAccount.id).toBe(first.financialAccount.id);
+    expect(await scalar('select count(*)::int as value from public.financial_accounts where business_id=$1 and account_code=$2', [businessA, 'OPERATING-BANK'])).toBe(1);
+    expect(await scalar('select count(*)::int as value from public.accounts where id=$1 and business_id=$2 and account_type=$3', [first.financialAccount.account_id, businessA, 'ASSET'])).toBe(1);
+
+    await expect(db.query(
+      `select public.create_financial_account_with_ledger(
+        $1, 'Second Bank', 'BANK'::public.financial_account_type_enum, 'SECOND-BANK',
+        'MYR', 'ACTIVE', 'Example Bank', 'Example Company', '009999', 0, '2026-10-19', $2
+      )`,
+      [businessA, first.financialAccount.account_id],
+    )).rejects.toThrow(/already linked/);
+    await expect(db.query(
+      `select public.create_financial_account_with_ledger(
+        $1, 'Cross Tenant Bank', 'BANK'::public.financial_account_type_enum, 'CROSS-TENANT-BANK',
+        'MYR', 'ACTIVE', 'Example Bank', 'Example Company', '008888', 0, '2026-10-19', $2
+      )`,
+      [businessA, accountB],
+    )).rejects.toThrow(/this business/);
+    expect(await scalar('select count(*)::int as value from public.financial_accounts where business_id=$1 and account_code in ($2,$3)', [businessA, 'SECOND-BANK', 'CROSS-TENANT-BANK'])).toBe(0);
+  });
+  it('posts a bank opening balance in the same creation transaction as a balanced journal', async () => {
+    await asUser(userA);
+    const result = await scalar(
+      `select public.create_financial_account_with_ledger(
+        $1, 'Opening Balance Bank', 'BANK'::public.financial_account_type_enum, 'OPENING-BANK',
+        'MYR', 'ACTIVE', 'Example Bank', 'Example Company', '009876', 125.50, '2026-10-20', null
+      ) as value`,
+      [businessA],
+    );
+    expect(result.openingJournal.status).toBe('POSTED');
+    expect(await scalar(
+      `select (sum(jl.debit) = sum(jl.credit)) as value
+       from public.journal_lines jl
+       join public.journal_entries je on je.id=jl.journal_entry_id
+       where je.id=$1`,
+      [result.openingJournal.journal_id],
+    )).toBe(true);
+    expect(await scalar('select count(*)::int as value from public.journal_lines where journal_entry_id=$1', [result.openingJournal.journal_id])).toBe(2);
+    const alternateLedger = await scalar("select id as value from public.accounts where business_id=$1 and code='1110'", [businessA]);
+    await expect(db.query('update public.financial_accounts set account_id=$1 where id=$2', [alternateLedger, result.financialAccount.id]))
+      .rejects.toThrow(/posted journal activity/);
+    await expect(db.query('update public.financial_accounts set opening_balance=200 where id=$1', [result.financialAccount.id]))
+      .rejects.toThrow(/balanced posted journal entry/);
+    await expect(db.query(
+      `insert into public.financial_accounts(business_id,name,type,account_code,opening_balance,account_id)
+       values ($1,'Unjournaled','CASH','UNJOURNALED',10,$2)`,
+      [businessA, alternateLedger],
+    )).rejects.toThrow(/balanced posted journal entry/);
+  });
   it('creates memberships without requiring or creating subscriptions', async () => {
     await db.exec('reset role');
     expect(await scalar('select count(*)::int as value from public.subscriptions')).toBe(0);
