@@ -169,7 +169,9 @@ export class ChartOfAccountsService {
     this.validateParentRelationship(input.businessId, input.accountType, input.parentId ?? null, null);
 
     const normalBalance = input.normalBalance ?? this.buildNormalBalance(input.accountType);
-    const validBalance = input.accountType === 'ASSET' || input.accountType === 'EXPENSE' || input.accountType === 'COGS'
+    const validBalance = input.accountType === 'ASSET'
+      ? normalBalance === 'DEBIT' || normalBalance === 'CREDIT'
+      : input.accountType === 'EXPENSE' || input.accountType === 'COGS'
       ? normalBalance === 'DEBIT'
       : normalBalance === 'CREDIT';
     if (!validBalance) {
@@ -235,8 +237,10 @@ export class ChartOfAccountsService {
       throw new Error('Circular parent reference detected.');
     }
 
-    const isAssetLike = nextType === 'ASSET' || nextType === 'EXPENSE' || nextType === 'COGS';
-    const validBalance = isAssetLike ? nextNormalBalance === 'DEBIT' : nextNormalBalance === 'CREDIT';
+    const isAssetLike = nextType === 'EXPENSE' || nextType === 'COGS';
+    const validBalance = nextType === 'ASSET'
+      ? nextNormalBalance === 'DEBIT' || nextNormalBalance === 'CREDIT'
+      : isAssetLike ? nextNormalBalance === 'DEBIT' : nextNormalBalance === 'CREDIT';
     if (!validBalance) {
       throw new Error('normal balance is invalid for this account type.');
     }
