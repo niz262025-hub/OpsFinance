@@ -96,6 +96,26 @@ beforeAll(async () => {
 afterAll(async () => { await db?.close(); });
 
 describe.sequential('PostgreSQL migration replay and tenant A/B boundaries', () => {
+  it('can reapply migration 019 without duplicates and roll back all migration effects transactionally', async () => {
+    await db.exec('reset role');
+    const accountCount = await scalar('select count(*)::int as value from public.accounts where business_id=$1', [businessA]);
+    const financialAccountCount = await scalar('select count(*)::int as value from public.financial_accounts where business_id=$1', [businessA]);
+    const migration = readFileSync('supabase/migrations/019_default_coa_and_atomic_bank_accounts.sql', 'utf8');
+
+    await db.exec('begin');
+    await db.exec(migration);
+    expect(await scalar('select count(*)::int as value from public.accounts where business_id=$1', [businessA])).toBe(accountCount);
+    expect(await scalar('select count(*)::int as value from public.financial_accounts where business_id=$1', [businessA])).toBe(financialAccountCount);
+
+    const transientBusiness = '20000000-0000-0000-0000-000000000099';
+    await db.query('insert into public.businesses(id,name) values ($1,$2)', [transientBusiness, 'Rollback check']);
+    expect(await scalar('select count(*)::int as value from public.accounts where business_id=$1', [transientBusiness])).toBeGreaterThan(0);
+    await db.exec('rollback');
+
+    expect(await scalar('select count(*)::int as value from public.businesses where id=$1', [transientBusiness])).toBe(0);
+    expect(await scalar('select count(*)::int as value from public.accounts where business_id=$1', [businessA])).toBe(accountCount);
+    expect(await scalar('select count(*)::int as value from public.financial_accounts where business_id=$1', [businessA])).toBe(financialAccountCount);
+  });
   it('backfills partial businesses without replacing existing account codes', async () => {
     await db.exec('reset role');
     expect(await scalar("select name as value from public.accounts where business_id=$1 and code='1000'", [businessA])).toBe('Legacy Asset Root');
