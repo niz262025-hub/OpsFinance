@@ -174,9 +174,6 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
 
         {userEmail ? <div className="opsfinance-user-block">{userEmail}</div> : null}
 
-        <button type="button" onClick={signOut} className="opsfinance-signout">
-          Sign out
-        </button>
       </aside>
 
       <div className="opsfinance-main-panel">
@@ -201,7 +198,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
           <div className="opsfinance-topbar-meta">
             <div className="opsfinance-business-pill">{businessName ?? 'No active business'}</div>
             <button type="button" onClick={signOut} className="opsfinance-signout">
-              Sign out
+              Kembali ke MYOPS
             </button>
           </div>
         </header>
