@@ -51,6 +51,7 @@ const navGroups: NavGroup[] = [
       { href: '/upload', label: 'Bank Statement' },
       { href: '/upload', label: 'Invoice / Bill' },
       { href: '/upload', label: 'Receipt' },
+      { href: '/reconciliation', label: 'Bank Reconciliation' },
     ],
   },
   {
