@@ -63,8 +63,8 @@ describe('auth middleware session boundary', () => {
     vi.stubEnv('NEXT_PUBLIC_PREVIEW_AUTH_BYPASS', 'true');
     vi.stubEnv('PREVIEW_AUTH_BYPASS', 'true');
     const response = await middleware(new NextRequest('https://app.myops.com.my/dashboard'));
-    expect(response.headers.get('location')).toBe('https://app.myops.com.my/login');
-    expect(getUserMock).toHaveBeenCalledOnce();
+    expect(response.status).toBe(503);
+    expect(getUserMock).not.toHaveBeenCalled();
   });
 
   it('missing configuration leads protected pages to an accessible login instead of a root loop', async () => {

@@ -425,26 +425,34 @@ export class FinancialReportService {
     let cogsTotal = DecimalMoney.zero();
     let expensesTotal = DecimalMoney.zero();
 
-    for (const account of this.getBusinessAccounts(input.businessId)) {
-      let amount = DecimalMoney.zero();
-      for (const journal of this.getRangeJournalLines(input.businessId, input.dateFrom, input.dateTo)) {
-        for (const line of journal.lines) {
-          if (line.accountId !== account.id) continue;
-          if (account.accountType === 'REVENUE') amount = amount.add(new DecimalMoney(line.credit ?? '0.00'));
-          if (account.accountType === 'COGS') amount = amount.add(new DecimalMoney(line.debit ?? '0.00'));
-          if (account.accountType === 'EXPENSE') amount = amount.add(new DecimalMoney(line.debit ?? '0.00'));
-        }
+    const accounts = this.getBusinessAccounts(input.businessId);
+    const incomeAccounts = new Map(accounts.filter(account => ['REVENUE', 'COGS', 'EXPENSE'].includes(account.accountType)).map(account => [account.id, account]));
+    // Read one tenant/date-scoped snapshot and aggregate each line once. Keep this
+    // map request-local: financial balances must never be cached across customers.
+    const amounts = new Map<string, DecimalMoney>();
+    for (const journal of this.getRangeJournalLines(input.businessId, input.dateFrom, input.dateTo)) {
+      for (const line of journal.lines) {
+        const account = incomeAccounts.get(line.accountId);
+        if (!account) continue;
+        const debit = new DecimalMoney(line.debit ?? '0.00');
+        const credit = new DecimalMoney(line.credit ?? '0.00');
+        const impact = account.accountType === 'REVENUE' ? credit.subtract(debit) : debit.subtract(credit);
+        amounts.set(account.id, (amounts.get(account.id) ?? DecimalMoney.zero()).add(impact));
       }
+    }
 
-      if (account.accountType === 'REVENUE' && amount.isPositive()) {
+    for (const account of accounts) {
+      const amount = amounts.get(account.id) ?? DecimalMoney.zero();
+
+      if (account.accountType === 'REVENUE' && !amount.isZero()) {
         revenue.push({ accountId: account.id, accountName: account.name, amount: amount.toString() });
         revenueTotal = revenueTotal.add(amount);
       }
-      if (account.accountType === 'COGS' && amount.isPositive()) {
+      if (account.accountType === 'COGS' && !amount.isZero()) {
         cogs.push({ accountId: account.id, accountName: account.name, amount: amount.toString() });
         cogsTotal = cogsTotal.add(amount);
       }
-      if (account.accountType === 'EXPENSE' && amount.isPositive()) {
+      if (account.accountType === 'EXPENSE' && !amount.isZero()) {
         expenses.push({ accountId: account.id, accountName: account.name, amount: amount.toString() });
         expensesTotal = expensesTotal.add(amount);
       }
