@@ -13,12 +13,22 @@ export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 
   const pathname = request.nextUrl.pathname;
+  const protectedPath=PROTECTED_PATH_PREFIXES.some(prefix=>pathname===prefix||pathname.startsWith(`${prefix}/`));
+  const protectedApi=pathname.startsWith('/api/') && !pathname.startsWith('/api/myops/');
+  // Hosted builds must never fall back to a separate Finance identity when an
+  // environment flag is missing. Keep the legacy adapter for local development only.
+  if (['preview', 'production'].includes(process.env.VERCEL_ENV ?? '') && !ssoEnabled()) {
+    if (['/login', '/register', '/auth/callback', '/', '/opsfinance'].includes(pathname)) {
+      const target = pathname === '/register' ? '/register' : pathname === '/login' || pathname === '/auth/callback' ? '/login' : '/';
+      return NextResponse.redirect(new URL(target, process.env.MYOPS_ORIGIN ?? 'https://www.myops.com.my'));
+    }
+    if (protectedPath || protectedApi) return NextResponse.json({ error: 'Open OpsFinance through MYOPS. Application access is temporarily unavailable.' },
+      { status: 503, headers: { 'Cache-Control': 'private, no-store' } });
+  }
   if (ssoEnabled()) {
-    const protectedPath=PROTECTED_PATH_PREFIXES.some(prefix=>pathname===prefix||pathname.startsWith(`${prefix}/`));
-    const protectedApi=pathname.startsWith('/api/') && !pathname.startsWith('/api/myops/');
     if (['/login','/register','/auth/callback','/','/opsfinance'].includes(pathname)) {
       // No local login in SSO mode. MYOPS owns registration and sign-in.
-      const target = pathname === '/login' || pathname === '/register' ? '/login' : '/';
+      const target = pathname === '/register' ? '/register' : pathname === '/login' || pathname === '/auth/callback' ? '/login' : '/';
       return NextResponse.redirect(new URL(target,process.env.MYOPS_ORIGIN??'https://www.myops.com.my'));
     }
     if(protectedPath||protectedApi) {
