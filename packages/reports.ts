@@ -430,21 +430,21 @@ export class FinancialReportService {
       for (const journal of this.getRangeJournalLines(input.businessId, input.dateFrom, input.dateTo)) {
         for (const line of journal.lines) {
           if (line.accountId !== account.id) continue;
-          if (account.accountType === 'REVENUE') amount = amount.add(new DecimalMoney(line.credit ?? '0.00'));
-          if (account.accountType === 'COGS') amount = amount.add(new DecimalMoney(line.debit ?? '0.00'));
-          if (account.accountType === 'EXPENSE') amount = amount.add(new DecimalMoney(line.debit ?? '0.00'));
+          if (account.accountType === 'REVENUE') amount = amount.add(new DecimalMoney(line.credit ?? '0.00').subtract(new DecimalMoney(line.debit ?? '0.00')));
+          if (account.accountType === 'COGS') amount = amount.add(new DecimalMoney(line.debit ?? '0.00').subtract(new DecimalMoney(line.credit ?? '0.00')));
+          if (account.accountType === 'EXPENSE') amount = amount.add(new DecimalMoney(line.debit ?? '0.00').subtract(new DecimalMoney(line.credit ?? '0.00')));
         }
       }
 
-      if (account.accountType === 'REVENUE' && amount.isPositive()) {
+      if (account.accountType === 'REVENUE' && !amount.isZero()) {
         revenue.push({ accountId: account.id, accountName: account.name, amount: amount.toString() });
         revenueTotal = revenueTotal.add(amount);
       }
-      if (account.accountType === 'COGS' && amount.isPositive()) {
+      if (account.accountType === 'COGS' && !amount.isZero()) {
         cogs.push({ accountId: account.id, accountName: account.name, amount: amount.toString() });
         cogsTotal = cogsTotal.add(amount);
       }
-      if (account.accountType === 'EXPENSE' && amount.isPositive()) {
+      if (account.accountType === 'EXPENSE' && !amount.isZero()) {
         expenses.push({ accountId: account.id, accountName: account.name, amount: amount.toString() });
         expensesTotal = expensesTotal.add(amount);
       }

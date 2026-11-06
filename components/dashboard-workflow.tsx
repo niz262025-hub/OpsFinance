@@ -20,6 +20,25 @@ const formatMoney = (value: string | number | undefined) => {
   return `RM${numeric.toFixed(2)}`;
 };
 
+function DashboardWelcome({ businessName }: { businessName?: string }) {
+  const [clock, setClock] = useState<Date | null>(null);
+  useEffect(() => {
+    const update = () => setClock(new Date());
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const hour = clock?.getHours() ?? 0;
+  const greeting = clock ? (hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Night') : 'Welcome';
+  return <header className="opsfinance-dashboard-header">
+    <div><p className="opsfinance-section-kicker">MYOPS</p><h1>{greeting}{businessName ? `, ${businessName}` : ''}</h1></div>
+    <time className="opsfinance-dashboard-clock" dateTime={clock?.toISOString()}>
+      {clock?.toLocaleDateString('en-MY', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
+      <strong>{clock?.toLocaleTimeString('en-MY')}</strong>
+    </time>
+  </header>;
+}
+
 export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflowProps) {
   const [summary, setSummary] = useState<Array<{ label: string; value: string }>>([]);
   const [balances, setBalances] = useState<Array<{ id: string; name: string; type: string; balance: string }>>([]);
@@ -190,15 +209,9 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
 
   return (
     <main className="opsfinance-dashboard">
-      <header className="opsfinance-dashboard-header">
-        <div>
-          <p className="opsfinance-section-kicker">OpsFinance</p>
-          <h1>OpsFinance Dashboard</h1>
-        </div>
-        <div className="opsfinance-business-pill">{businessName ?? 'Active business'}</div>
-      </header>
+      <DashboardWelcome businessName={businessName} />
 
-      {loading ? <div className="opsfinance-panel">Loading real DB-backed dashboard data…</div> : null}
+      {loading ? <div className="opsfinance-panel" role="status">Loading your financial summary…</div> : null}
 
       <section className="opsfinance-kpi-grid">
         {summary.map((card) => (
