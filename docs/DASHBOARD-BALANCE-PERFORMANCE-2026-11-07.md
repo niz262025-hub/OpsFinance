@@ -40,3 +40,12 @@ The previous browser tab no longer existed after inactivity. A fresh central UAT
 Next acceptance: compare actual cold/warm authenticated dashboard usable times and screen transitions on the same device/network with five samples each. Reconcile RM85 cash / RM125 revenue / RM40 expenses / RM85 profit and bank/cash ledgers RM45/RM40, recent transaction values and existing report balances. Then perform mobile and negative-access checks. Keep PR 37 draft until the outstanding UAT and broader approved repairs pass.
 
 Rollback: revert the balance optimization or restore the preceding isolated preview source cdf52925fbe74c704713914d9ef2b24a149b7a50 (deployment dpl_73S6aYS1bfLKeFxxCJiA3Ywy2qs8). This retains the earlier SSO-performance repair. No data or migration rollback is required.
+
+## Built source and evidence
+
+| Candidate | Source | Deployment | Build |
+| --- | --- | --- | --- |
+| Isolated UAT | 7d01eeaa52f894bef5fb99afbda92e3e939d1d11 | dpl_F2M7sAyhyYnXsKT6H5r6Bs6rQAfx — https://opsfinance-2ed0erm3i-mohd-syaiful-nizam1.vercel.app | READY, preview |
+| PR implementation | 83f4562133d28347efaa9b1122b9a56ab4ff34db | dpl_BR4otLUn4PZwUVpssARqDQKxCYS7 — https://opsfinance-d8rhwd69s-mohd-syaiful-nizam1.vercel.app | READY, preview |
+
+Both worktree TypeScript checks passed. [Benchmark output](./uat-evidence/dashboard-balance-benchmark-2026-11-07.json), [release regression log](./uat-evidence/dashboard-balance-release-full-2026-11-07.log), [staging regression log](./uat-evidence/dashboard-balance-staging-full-2026-11-07.log). No migration or production alias was changed.
