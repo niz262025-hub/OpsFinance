@@ -8,6 +8,8 @@
  * authorization boundary for accounting functionality.
  */
 export type PlanCode = 'STARTER';
+export type MyopsApp = 'OpsPS' | 'OpsFinance' | 'OpsFlow';
+export type MyopsBundlePlan = 'STARTER' | 'SINGLE_APP' | 'TWO_APPS' | 'THREE_APPS';
 export type SubscriptionLifecycleStatus = 'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'SUSPENDED' | 'CANCELLED';
 export type PaymentStatus = 'INITIATED' | 'PENDING' | 'AUTHORIZED' | 'PAID' | 'FAILED' | 'CANCELLED' | 'REFUNDED';
 export type AccessOperation = 'READ' | 'WRITE';
@@ -35,6 +37,20 @@ export type BillingFeature =
   | 'inventory'
   | 'advanced_tax'
   | 'advanced_approval';
+
+export interface MyopsBundleDefinition {
+  code: MyopsBundlePlan;
+  name: string;
+  monthlyPrice: string;
+  currency: string;
+  includedApps: MyopsApp[];
+  trialDays: number;
+  maxBusinesses: number;
+  maxUsers: number;
+  graceDays: number;
+  cancellationPolicy: 'PERIOD_END';
+  features: BillingFeature[];
+}
 
 export interface PlanDefinition {
   code: PlanCode;
@@ -112,37 +128,143 @@ export interface BillingConfiguration {
   livePaymentProvider: 'NOT_CONFIGURED';
 }
 
+export const MYOPS_BUNDLE_PLANS: Record<MyopsBundlePlan, MyopsBundleDefinition> = {
+  STARTER: {
+    code: 'STARTER',
+    name: 'Starter',
+    monthlyPrice: '9.90',
+    currency: 'MYR',
+    includedApps: ['OpsFinance'],
+    trialDays: 14,
+    maxBusinesses: 1,
+    maxUsers: 1,
+    graceDays: 7,
+    cancellationPolicy: 'PERIOD_END',
+    features: [
+      'dashboard',
+      'transactions',
+      'accounts',
+      'upload_and_convert',
+      'reports',
+      'reports_view',
+      'report_print',
+      'report_download',
+      'report_export',
+      'account_statement_view',
+      'account_statement_print',
+      'account_statement_download',
+      'account_statement_export',
+      'reconciliation',
+      'settings',
+      'accounting_rules',
+    ],
+  },
+  SINGLE_APP: {
+    code: 'SINGLE_APP',
+    name: 'Single paid app',
+    monthlyPrice: '19.90',
+    currency: 'MYR',
+    includedApps: ['OpsFinance'],
+    trialDays: 14,
+    maxBusinesses: 1,
+    maxUsers: 1,
+    graceDays: 7,
+    cancellationPolicy: 'PERIOD_END',
+    features: [
+      'dashboard',
+      'transactions',
+      'accounts',
+      'upload_and_convert',
+      'reports',
+      'reports_view',
+      'report_print',
+      'report_download',
+      'report_export',
+      'account_statement_view',
+      'account_statement_print',
+      'account_statement_download',
+      'account_statement_export',
+      'reconciliation',
+      'settings',
+      'accounting_rules',
+    ],
+  },
+  TWO_APPS: {
+    code: 'TWO_APPS',
+    name: 'Any 2 paid apps',
+    monthlyPrice: '29.90',
+    currency: 'MYR',
+    includedApps: ['OpsFinance', 'OpsFlow'],
+    trialDays: 14,
+    maxBusinesses: 1,
+    maxUsers: 1,
+    graceDays: 7,
+    cancellationPolicy: 'PERIOD_END',
+    features: [
+      'dashboard',
+      'transactions',
+      'accounts',
+      'upload_and_convert',
+      'reports',
+      'reports_view',
+      'report_print',
+      'report_download',
+      'report_export',
+      'account_statement_view',
+      'account_statement_print',
+      'account_statement_download',
+      'account_statement_export',
+      'reconciliation',
+      'settings',
+      'accounting_rules',
+    ],
+  },
+  THREE_APPS: {
+    code: 'THREE_APPS',
+    name: 'All 3 paid apps',
+    monthlyPrice: '39.90',
+    currency: 'MYR',
+    includedApps: ['OpsFinance', 'OpsFlow', 'OpsPS'],
+    trialDays: 14,
+    maxBusinesses: 1,
+    maxUsers: 1,
+    graceDays: 7,
+    cancellationPolicy: 'PERIOD_END',
+    features: [
+      'dashboard',
+      'transactions',
+      'accounts',
+      'upload_and_convert',
+      'reports',
+      'reports_view',
+      'report_print',
+      'report_download',
+      'report_export',
+      'account_statement_view',
+      'account_statement_print',
+      'account_statement_download',
+      'account_statement_export',
+      'reconciliation',
+      'settings',
+      'accounting_rules',
+    ],
+  },
+};
+
 export const STARTER_PLAN: PlanDefinition = {
   code: 'STARTER',
   name: 'Starter',
-  monthlyPrice: '29.00',
-  currency: 'MYR',
-  maxBusinesses: 1,
-  maxUsers: 1,
-  graceDays: 7,
+  monthlyPrice: MYOPS_BUNDLE_PLANS.STARTER.monthlyPrice,
+  currency: MYOPS_BUNDLE_PLANS.STARTER.currency,
+  maxBusinesses: MYOPS_BUNDLE_PLANS.STARTER.maxBusinesses,
+  maxUsers: MYOPS_BUNDLE_PLANS.STARTER.maxUsers,
+  graceDays: MYOPS_BUNDLE_PLANS.STARTER.graceDays,
   cancellationPolicy: 'PERIOD_END',
-  features: [
-    'dashboard',
-    'transactions',
-    'accounts',
-    'upload_and_convert',
-    'reports',
-    'reports_view',
-    'report_print',
-    'report_download',
-    'report_export',
-    'account_statement_view',
-    'account_statement_print',
-    'account_statement_download',
-    'account_statement_export',
-    'reconciliation',
-    'settings',
-    'accounting_rules',
-  ],
+  features: MYOPS_BUNDLE_PLANS.STARTER.features,
 };
 
 export const DEFAULT_BILLING_CONFIGURATION: BillingConfiguration = {
-  monthlyPrice: '29.00',
+  monthlyPrice: MYOPS_BUNDLE_PLANS.STARTER.monthlyPrice,
   currency: 'MYR',
   graceDays: 7,
   cancellationPolicy: 'PERIOD_END',
