@@ -1,0 +1,154 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> opsfinance@0.1.0 test
+> vitest run --environment jsdom --maxWorkers=1 --minWorkers=1
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.1.9 /workspace/scratch/88808803d658/uat/finance
+
+ ✓ tests/reconciliation.test.ts (11 tests) 84ms
+ ✓ tests/reports.test.ts (18 tests) 281ms
+ ✓ tests/upload.test.ts (15 tests) 41ms
+ ✓ tests/accounting-engine.test.ts (16 tests) 36ms
+ ✓ tests/accounting-rules.test.ts (9 tests) 18ms
+ ✓ tests/preview-business-scenario.integration.test.ts (1 test) 19ms
+ ✓ tests/chart-of-accounts.test.ts (13 tests) 17ms
+ ✓ tests/transaction-workflow.test.ts (7 tests) 11ms
+ ↓ tests/supabase-accounting-persistence.test.ts (1 test | 1 skipped)
+ ✓ tests/upload-live-ui.test.tsx (4 tests) 351ms
+ ✓ tests/supabase-phase10a.test.ts (11 tests) 64ms
+ ✓ tests/transaction-form.test.tsx (9 tests) 719ms
+ ✓ tests/tenant-write-isolation.test.ts (10 tests) 14ms
+ ✓ tests/auth-login.test.tsx (5 tests) 304ms
+ ✓ tests/accounting-settings.test.ts (7 tests) 14ms
+ ✓ tests/financial-accounts.test.ts (3 tests) 10ms
+ ✓ tests/business-profile.test.ts (11 tests) 20ms
+ ✓ tests/rls-policy-contract.test.ts (6 tests) 30ms
+ ✓ tests/backend-readiness.test.ts (5 tests) 9ms
+ ✓ tests/report-reversal.test.ts (4 tests) 20ms
+ ✓ tests/financial-account-ui.test.tsx (2 tests) 362ms
+   ✓ financial account ui > renders the create account action and submits an account creation request 344ms
+ ✓ tests/dashboard-totals.test.tsx (2 tests) 258ms
+ ✓ tests/auth-app-wiring.test.ts (6 tests) 12ms
+ ✓ tests/supabase-subscription-persistence.test.ts (1 test) 7ms
+ ✓ tests/accounting-security.test.ts (5 tests) 8ms
+ ✓ tests/payment-provider.test.ts (4 tests) 5ms
+ ✓ tests/reports-workflow-detail.test.tsx (2 tests) 285ms
+ ✓ tests/supabase-client.test.ts (4 tests) 53ms
+ ✓ tests/business-onboarding.test.tsx (2 tests) 208ms
+ ✓ tests/shell-navigation.test.tsx (2 tests) 349ms
+stderr | tests/shell-navigation.test.tsx
+Error: Not implemented: navigation (except hash changes)
+    at module.exports (/workspace/scratch/88808803d658/repos/OpsFinance/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at navigateFetch (/workspace/scratch/88808803d658/repos/OpsFinance/node_modules/jsdom/lib/jsdom/living/window/navigation.js:77:3)
+    at exports.navigate (/workspace/scratch/88808803d658/repos/OpsFinance/node_modules/jsdom/lib/jsdom/living/window/navigation.js:55:3)
+    at Timeout._onTimeout (/workspace/scratch/88808803d658/repos/OpsFinance/node_modules/jsdom/lib/jsdom/living/nodes/HTMLHyperlinkElementUtils-impl.js:81:7)
+    at listOnTimeout (node:internal/timers:685:17)
+    at processTimers (node:internal/timers:618:7) undefined
+
+ ✓ tests/preview-report-api.test.ts (3 tests) 32ms
+ ✓ tests/subscription.test.ts (3 tests) 8ms
+ ✓ tests/statement-account.test.ts (3 tests) 10ms
+ ✓ tests/auth-navigation.test.ts (4 tests) 6ms
+ ✓ tests/myops-idle-shell.test.tsx (1 test) 121ms
+ ✓ tests/myops-launch-page.test.tsx (2 tests) 118ms
+ ✓ tests/reconciliation-live-ui.test.tsx (1 test) 165ms
+ ✓ tests/subscription-ui.test.ts (2 tests) 205ms
+ ✓ tests/auth.test.ts (4 tests) 4ms
+ ✓ tests/source-of-truth.test.ts (2 tests) 18ms
+ ✓ tests/workflow-integration.test.tsx (2 tests) 584ms
+   ✓ workflow integration > renders the upload workflow and the review-first upload preview 460ms
+ ✓ tests/report-csv.test.ts (2 tests) 5ms
+ ✓ tests/reconciliation-snapshot-errors.test.ts (3 tests) 5ms
+ ✓ tests/subscription-trial-persistence-contract.test.ts (1 test) 4ms
+ ✓ tests/schema.test.ts (3 tests) 4ms
+ ✓ tests/business-context-isolation.test.ts (3 tests) 14ms
+ ✓ tests/supabase-idempotency-security.test.ts (1 test) 10ms
+ ✓ tests/business.test.ts (2 tests) 5ms
+ ✓ tests/rls.test.ts (2 tests) 4ms
+ ✓ tests/myops-broker.test.ts (1 test) 4ms
+ ✓ tests/database-tenant-isolation.test.ts (9 tests) 2899ms
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > starts only read-only access checks together but withholds the client until central approval
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":2}
+myops_performance {"phase":"identity_mapping","durationMs":3}
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > starts only read-only access checks together but withholds the client until central approval
+myops_performance {"phase":"central_entitlement","durationMs":50}
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > still denies access after central revocation
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":0}
+myops_performance {"phase":"identity_mapping","durationMs":1}
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > still denies access after mapping revocation
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":1}
+myops_performance {"phase":"identity_mapping","durationMs":1}
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > still denies access after identity revocation
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":0}
+myops_performance {"phase":"identity_mapping","durationMs":0}
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > still denies access after membership revocation
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":0}
+myops_performance {"phase":"identity_mapping","durationMs":0}
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > completes independent network checks in one latency group rather than two
+myops_performance {"phase":"local_membership","durationMs":100}
+myops_performance {"phase":"central_entitlement","durationMs":120}
+myops_performance {"phase":"local_identity","durationMs":140}
+myops_performance {"phase":"identity_mapping","durationMs":180}
+
+stderr | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > refuses unmapped identities and never falls back to matching an email
+myops_identity_lookup_unavailable mapping_missing
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > revalidates central entitlement, identity mapping and membership on data access
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":0}
+myops_performance {"phase":"identity_mapping","durationMs":0}
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":0}
+myops_performance {"phase":"identity_mapping","durationMs":0}
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":1}
+myops_performance {"phase":"local_membership","durationMs":1}
+myops_performance {"phase":"identity_mapping","durationMs":1}
+
+ ✓ tests/myops-identity-bridge.test.ts (10 tests) 128ms
+stderr | tests/myops-transport.test.ts > MYOPS signed server transport > shares preview bootstrap across concurrent operations but checks entitlement every time and expires transport reuse
+myops_preview_transport_failed http 403
+
+ ✓ tests/myops-transport.test.ts (10 tests) 269ms
+ ✓ tests/middleware-auth.test.ts (10 tests) 21ms
+ ✓ tests/user-activity.test.ts (4 tests) 18ms
+stdout | tests/myops-middleware.test.ts > SSO middleware boundary > requires the sealed SSO session, preserves refresh and rechecks central authorization
+myops_performance {"phase":"middleware_entitlement","durationMs":0}
+
+stdout | tests/myops-middleware.test.ts > SSO middleware boundary > denies revoked sessions on pages and APIs
+myops_performance {"phase":"middleware_entitlement","durationMs":0}
+myops_performance {"phase":"middleware_entitlement","durationMs":0}
+
+ ✓ tests/myops-middleware.test.ts (5 tests) 26ms
+ ✓ tests/myops-data-proxy.test.ts (3 tests) 17ms
+ ✓ tests/myops-launch.test.ts (4 tests) 18ms
+ ✓ tests/myops-session.test.ts (4 tests) 9ms
+ ✓ tests/myops-browser-client.test.ts (2 tests) 18ms
+ ✓ tests/upload-account-route.test.ts (2 tests) 13ms
+ ✓ tests/myops-idle-logout.test.ts (3 tests) 21ms
+ ✓ tests/myops-activity.test.ts (2 tests) 15ms
+
+ Test Files  62 passed | 1 skipped (63)
+      Tests  308 passed | 1 skipped (309)
+   Start at  14:33:30
+   Duration  68.90s (transform 1.71s, setup 0ms, collect 5.38s, tests 8.41s, environment 31.52s, prepare 7.01s)
+

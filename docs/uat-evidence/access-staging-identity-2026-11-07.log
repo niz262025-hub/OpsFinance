@@ -1,0 +1,71 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> opsfinance@0.1.0 test
+> vitest run --environment jsdom tests/myops-identity-bridge.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.1.9 /workspace/scratch/88808803d658/uat/finance
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > starts only read-only access checks together but withholds the client until central approval
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":0}
+myops_performance {"phase":"identity_mapping","durationMs":0}
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > starts only read-only access checks together but withholds the client until central approval
+myops_performance {"phase":"central_entitlement","durationMs":49}
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > still denies access after central revocation
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":0}
+myops_performance {"phase":"identity_mapping","durationMs":0}
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > still denies access after mapping revocation
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":0}
+myops_performance {"phase":"identity_mapping","durationMs":0}
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > still denies access after identity revocation
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":0}
+myops_performance {"phase":"identity_mapping","durationMs":0}
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > still denies access after membership revocation
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":0}
+myops_performance {"phase":"identity_mapping","durationMs":0}
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > completes independent network checks in one latency group rather than two
+myops_performance {"phase":"local_membership","durationMs":100}
+myops_performance {"phase":"central_entitlement","durationMs":120}
+myops_performance {"phase":"local_identity","durationMs":140}
+myops_performance {"phase":"identity_mapping","durationMs":180}
+
+stderr | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > refuses unmapped identities and never falls back to matching an email
+myops_identity_lookup_unavailable mapping_missing
+
+stdout | tests/myops-identity-bridge.test.ts > MYOPS identity to RLS-user bridge > revalidates central entitlement, identity mapping and membership on data access
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":0}
+myops_performance {"phase":"identity_mapping","durationMs":0}
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":0}
+myops_performance {"phase":"identity_mapping","durationMs":0}
+myops_performance {"phase":"central_entitlement","durationMs":0}
+myops_performance {"phase":"local_identity","durationMs":0}
+myops_performance {"phase":"local_membership","durationMs":0}
+myops_performance {"phase":"identity_mapping","durationMs":0}
+
+ ✓ tests/myops-identity-bridge.test.ts (10 tests) 82ms
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  14:36:00
+   Duration  647ms (transform 144ms, setup 0ms, collect 153ms, tests 82ms, environment 0ms, prepare 97ms)
+
