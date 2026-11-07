@@ -173,11 +173,29 @@ export function ReportsWorkflow({ businessId, businessContextError, defaultRepor
   }, [businessId, dateFrom, dateTo]);
 
   useEffect(() => {
-    if (!businessId || !selectedAccountId || reportSource?.businessId !== businessId) return;
+    if (!businessId || !reportSource || reportSource.businessId !== businessId) {
+      setLedger(null);
+      setStatement(null);
+      return;
+    }
+
+    if (!selectedAccountId) {
+      setLedger(null);
+      setStatement(null);
+      return;
+    }
+
+    const isKnownAccount = accounts.some((account) => account.id === selectedAccountId);
+    if (!isKnownAccount) {
+      setLedger(null);
+      setStatement(null);
+      return;
+    }
+
     const input = { businessId, accountId: selectedAccountId, dateFrom, dateTo };
     setLedger(reportSource.service.getGeneralLedger(input));
     setStatement(reportSource.service.getAccountStatement(input));
-  }, [selectedAccountId, businessId, dateFrom, dateTo, reportSource]);
+  }, [accounts, selectedAccountId, businessId, dateFrom, dateTo, reportSource]);
 
   const rowData = report === 'ledger' ? ledger : report === 'trial' ? trial : report === 'pnl' ? pnl : report === 'sheet' ? sheet : report === 'cash' ? cash : statement;
 
