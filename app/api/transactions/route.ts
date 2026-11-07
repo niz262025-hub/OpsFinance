@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   const [accountsResult, financialAccountsResult, transactionsResult] = await Promise.all([
     supabase.from('accounts').select('*').eq('business_id', businessId).order('code', { ascending: true }),
     supabase.from('financial_accounts').select('*').eq('business_id', businessId).order('name', { ascending: true }),
-    supabase.from('transactions').select('*').eq('business_id', businessId).order('transaction_date', { ascending: false }).limit(20),
+    supabase.from('transactions').select('*').eq('business_id', businessId).order('transaction_date', { ascending: false }).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(20),
   ]);
 
   if (accountsResult.error) {

@@ -224,9 +224,17 @@ export function ReportsWorkflow({ businessId, businessContextError, defaultRepor
           <div>
             <p style={{ margin: 0, color: '#475569', letterSpacing: '0.08em', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>OpsFinance</p>
             <h1 style={{ margin: '0.35rem 0 0' }}>Financial Reports</h1>
-            <button type="button" className="opsfinance-secondary-button" disabled={loading || !rowData} onClick={() => {
+            <button type="button" className="opsfinance-secondary-button" disabled={loading || !rowData} onClick={async () => {
               if (loading || !rowData) return;
-              const csv = reportCsv(rowData, {report: buttonLabels[report], business: businessId, from: dateFrom, to: dateTo});
+              let csv:string;
+              if(isPreviewAuthBypassEnabled()) csv=reportCsv(rowData,{report:buttonLabels[report],business:businessId,from:dateFrom,to:dateTo});
+              else {
+                try {
+                  const response=await fetch('/api/reports/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({businessId,report:rowData,label:buttonLabels[report],from:dateFrom,to:dateTo})});
+                  if(!response.ok){const result=await response.json();setError(result.error||'Report export unavailable.');return;}
+                  csv=await response.text();
+                }catch{setError('Report export unavailable. Try again.');return;}
+              }
               const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
               const link = document.createElement('a');
               link.href = url; link.download = `opsfinance-${report}-${dateFrom}-${dateTo}.csv`;
