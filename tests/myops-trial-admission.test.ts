@@ -17,11 +17,11 @@ it('preserves verified paid access but refuses trials until atomic Finance limit
  }
 });
 
-it('only accepts trial metadata behind the explicit Preview gate',async()=>{
+it('accepts central MYOPS trial entitlement without a local Preview-only gate',async()=>{
  const data={entitled:true,session_active:true,access_mode:'trial',trial:{id:session,expires_at:'2099-01-01T00:00:00Z',policy_version:1}};
  const transport=async()=>new Response(JSON.stringify(data));
- vi.stubEnv('OPSFINANCE_TRIAL_POSTING_READY','true');vi.stubEnv('VERCEL_ENV','production');
- await expect(checkMyopsEntitlement(config,session,false,transport as typeof fetch)).rejects.toThrow();
+ vi.stubEnv('VERCEL_ENV','production');
+ await expect(checkMyopsEntitlement(config,session,false,transport as typeof fetch)).resolves.toMatchObject({mode:'trial',trialId:session});
  vi.stubEnv('VERCEL_ENV','preview');
  await expect(checkMyopsEntitlement(config,session,false,transport as typeof fetch)).resolves.toMatchObject({mode:'trial',trialId:session});
 });
