@@ -16,8 +16,8 @@ describe('idle logout redirect',()=>{
     const result=await POST(new NextRequest('https://finance.example/api/myops/logout',{method:'POST',headers:{origin:'https://other.example'}}));
     expect(result.status).toBe(403);expect(result.headers.get('set-cookie')).toBeNull();
   });
-  it('preserves the existing explicit signout destination',async()=>{
+  it('returns an explicit app exit to the MYOPS homepage',async()=>{
     const result=await POST(new NextRequest('https://finance.example/api/myops/logout',{method:'POST',headers:{origin:'https://finance.example'}}));
-    expect(await result.json()).toEqual({next:'https://portal.example/dashboard'});
+    expect(await result.json()).toEqual({next:'https://portal.example/'});
   });
 });
