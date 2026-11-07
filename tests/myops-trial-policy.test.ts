@@ -1,6 +1,6 @@
 // @vitest-environment node
 import {expect,it} from 'vitest';
-import {assertFinanceFeature,financeAccessFromEntitlement,financeTrialLimit} from '../lib/auth/myops-trial-policy';
+import {assertFinanceFeature,financeAccessFromEntitlement,financeTrialLimit,resolveMyopsBundlePrice} from '../lib/auth/myops-trial-policy';
 const now=Date.parse('2026-11-02T00:00:00Z');
 const trial={id:'11111111-1111-4111-8111-111111111111',expires_at:'2026-11-03T00:00:00Z',policy_version:1};
 const active={entitled:true,session_active:true,access_mode:'trial',trial};
@@ -18,4 +18,18 @@ it('keeps paid access and applies the approved feature limits only to trials',()
   expect(()=>assertFinanceFeature({mode:'paid'},feature)).not.toThrow();
  }
  expect(financeAccessFromEntitlement({entitled:true,session_active:true},false,now)).toEqual({mode:'paid'});
+});
+
+it('surfaces the approved MYOPS bundle pricing for paid OpsFinance access', () => {
+ const { monthlyPrice, currency, app, plan } = resolveMyopsBundlePrice({
+   entitled: true,
+   session_active: true,
+   access_mode: 'paid',
+   bundle: { app: 'OpsFinance', plan: 'THREE_APPS', monthly_price: '39.90', currency: 'MYR' },
+ });
+
+ expect(monthlyPrice).toBe('39.90');
+ expect(currency).toBe('MYR');
+ expect(app).toBe('OpsFinance');
+ expect(plan).toBe('THREE_APPS');
 });
