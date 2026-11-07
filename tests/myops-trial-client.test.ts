@@ -25,3 +25,24 @@ it('preserves paid client and sanitizes trial database errors',async()=>{
  admin.rpc.mockResolvedValue({error:{message:'Finance trial usage limit reached'}});
  expect((await client.rpc('post_accounting_transaction_atomic',{p_business_id:'b'})).error.message).toContain('Upgrade in MYOPS');
 });
+it('allows only own-business basic account inserts through the RLS client and rejects non-atomic opening balances',()=>{
+ const insert=vi.fn().mockReturnValue('saved'),table={insert,update:vi.fn()},admin={rpc:vi.fn()};
+ const client:any={rpc:vi.fn(),from:vi.fn(()=>table)};
+ installFinanceTrialClient(client,admin,access,'u','b');
+ expect(client.from('accounts').insert({business_id:'b',code:'1000',is_system:false})).toBe('saved');
+ expect(client.from('financial_accounts').insert({business_id:'b',opening_balance:'0.00'})).toBe('saved');
+ for(const payload of [{business_id:'other'},[{business_id:'b'},{business_id:'other'}],[],{}])expect(()=>client.from('accounts').insert(payload)).toThrow();
+ expect(()=>client.from('accounts').insert({business_id:'b',is_system:true})).toThrow('System account');
+ for(const amount of ['100','bad',-1])expect(()=>client.from('financial_accounts').insert({business_id:'b',opening_balance:amount})).toThrow('zero opening balance');
+ expect(()=>client.from('financial_accounts').update({name:'changed'})).toThrow();
+ expect(insert).toHaveBeenCalledTimes(2);expect(admin.rpc).not.toHaveBeenCalled();
+});
+it('binds atomic statement imports to the verified server identity and safely reports the two-file limit',async()=>{
+ const admin={rpc:vi.fn().mockResolvedValue({data:{statementId:'statement',bankTransactions:[]},error:null})};
+ const client:any={rpc:vi.fn(),from:vi.fn()};installFinanceTrialClient(client,admin,access,'u','b');
+ await client.myopsTrialImport({business_id:'b',uploaded_by:'u'},[],'hash');
+ expect(admin.rpc).toHaveBeenCalledWith('opsfinance_trial_import_statement',expect.objectContaining({p_user_id:'u',p_business_id:'b',p_trial_id:access.trialId}));
+ await expect(client.myopsTrialImport({business_id:'other',uploaded_by:'u'},[],'hash')).rejects.toThrow('Business access denied');
+ admin.rpc.mockResolvedValue({error:{message:'Finance trial usage limit reached'}});
+ await expect(client.myopsTrialImport({business_id:'b',uploaded_by:'u'},[],'hash')).rejects.toThrow('2 files');
+});
