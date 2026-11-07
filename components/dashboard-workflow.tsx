@@ -138,16 +138,13 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
 
         const pnl = service.getProfitAndLoss({ businessId });
         const cashFlow = service.getCashFlow({ businessId });
-        const balancesData = accounts
-          .map((account) => {
-            const statement = service.getAccountStatement({ businessId, accountId: account.id });
-            return {
-              id: account.id,
-              name: account.name,
-              type: account.accountType,
-              balance: statement.closingBalance,
-            };
-          })
+        const balancesData = service.getAccountBalances({ businessId })
+          .map((account) => ({
+            id: account.accountId,
+            name: account.accountName,
+            type: account.accountType,
+            balance: account.closingBalance,
+          }))
           .filter((account) => Number(account.balance) !== 0 || account.type === 'ASSET' || account.type === 'LIABILITY' || account.type === 'EQUITY');
 
         setSummary([
