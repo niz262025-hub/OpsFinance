@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 import { AccountingEngine, type BusinessAccount } from '../packages/accounting';
@@ -19,6 +20,15 @@ const formatMoney = (value: string | number | undefined) => {
   }
   return `RM${numeric.toFixed(2)}`;
 };
+
+const quickActions = [
+  { href: '/transactions/money-in', label: 'Money In' },
+  { href: '/transactions/money-out', label: 'Money Out' },
+  { href: '/transactions/transfer', label: 'Transfer' },
+  { href: '/transactions/journal', label: 'Journal Entry' },
+  { href: '/accounts/financial', label: 'Bank Accounts' },
+  { href: '/upload', label: 'Upload & Convert' },
+];
 
 function DashboardWelcome({ businessName }: { businessName?: string }) {
   const [clock, setClock] = useState<Date | null>(null);
@@ -213,6 +223,18 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
 
       {loading ? <div className="opsfinance-panel" role="status">Loading your financial summary…</div> : null}
 
+      <section className="opsfinance-panel" aria-labelledby="dashboard-quick-actions">
+        <h2 id="dashboard-quick-actions" className="opsfinance-panel-header">Quick Actions</h2>
+        <nav aria-label="Quick Actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+          {quickActions.map(action => (
+            <Link key={action.href} href={action.href} prefetch={false}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 44, maxWidth: '100%', padding: '0.65rem 1rem', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--brand-rose)', color: 'var(--text)', fontWeight: 700, overflowWrap: 'anywhere', textAlign: 'center' }}>
+              {action.label}
+            </Link>
+          ))}
+        </nav>
+      </section>
+
       <section className="opsfinance-kpi-grid">
         {summary.map((card) => (
           <div key={card.label} className="opsfinance-stat-card">
@@ -222,18 +244,18 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
         ))}
       </section>
 
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '1rem' }}>
         <div className="opsfinance-panel">
           <h2 className="opsfinance-panel-header">Financial Account Balances</h2>
           {balances.length === 0 ? <div style={{ color: 'var(--muted)' }}>No account balances available.</div> : (
             <div className="opsfinance-balance-list">
               {balances.map((account) => (
                 <div key={account.id} className="opsfinance-balance-item">
-                  <div>
+                  <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                     <strong>{account.name}</strong>
                     <span>{account.type}</span>
                   </div>
-                  <div style={{ fontWeight: 700, color: 'var(--text)' }}>{formatMoney(account.balance)}</div>
+                  <div style={{ minWidth: 0, overflowWrap: 'anywhere', fontWeight: 700, color: 'var(--text)' }}>{formatMoney(account.balance)}</div>
                 </div>
               ))}
             </div>
@@ -246,12 +268,12 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
             <div className="opsfinance-transaction-list">
               {recentTransactions.map((transaction) => (
                 <div key={transaction.id} className="opsfinance-txn-item">
-                  <div className="opsfinance-txn-item-top">
-                    <strong>{transaction.description}</strong>
+                  <div className="opsfinance-txn-item-top" style={{ flexWrap: 'wrap' }}>
+                    <strong style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{transaction.description}</strong>
                     <span className="opsfinance-status">{transaction.status}</span>
                   </div>
-                  <div className="meta">{transaction.referenceNo ?? transaction.date}</div>
-                  <div style={{ fontWeight: 700, marginTop: '0.2rem', color: 'var(--text)' }}>{formatMoney(transaction.amount)}</div>
+                  <div className="meta" style={{ overflowWrap: 'anywhere' }}>{transaction.referenceNo ?? transaction.date}</div>
+                  <div style={{ overflowWrap: 'anywhere', fontWeight: 700, marginTop: '0.2rem', color: 'var(--text)' }}>{formatMoney(transaction.amount)}</div>
                 </div>
               ))}
             </div>
