@@ -9,6 +9,7 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     code: '',
     name: '',
@@ -50,16 +51,18 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
 
     try {
       const response = await fetch('/api/accounts', {
-        method: 'POST',
+        method: editingId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           businessId,
+          id: editingId,
           code: form.code,
           name: form.name,
           account_type: form.account_type,
           normal_balance: form.normal_balance,
           parent_id: form.parent_id || null,
           is_active: form.is_active,
+          is_system: false,
         }),
       });
       const payload = await response.json();
@@ -68,6 +71,7 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
         throw new Error(payload.error ?? 'Could not create account.');
       }
 
+      setEditingId(null);
       setForm({ code: '', name: '', account_type: 'ASSET', normal_balance: 'DEBIT', parent_id: '', is_active: true });
       await loadAccounts();
     } catch (caughtError) {
@@ -90,11 +94,13 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
           <div className="opsfinance-form-grid">
             <label>Code<input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} /></label>
             <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
-            <label>Type<select value={form.account_type} onChange={(event) => setForm((current) => ({ ...current, account_type: event.target.value }))}><option value="ASSET">ASSET</option><option value="LIABILITY">LIABILITY</option><option value="EQUITY">EQUITY</option><option value="REVENUE">REVENUE</option><option value="COGS">COGS</option><option value="EXPENSE">EXPENSE</option></select></label>
+            <label>Type<select value={form.account_type} onChange={(event) => setForm((current) => ({ ...current, account_type: event.target.value, normal_balance: ['ASSET', 'COGS', 'EXPENSE'].includes(event.target.value) ? 'DEBIT' : 'CREDIT', parent_id: '' }))}><option value="ASSET">ASSET</option><option value="LIABILITY">LIABILITY</option><option value="EQUITY">EQUITY</option><option value="REVENUE">REVENUE</option><option value="COGS">COGS</option><option value="EXPENSE">EXPENSE</option></select></label>
             <label>Normal Balance<select value={form.normal_balance} onChange={(event) => setForm((current) => ({ ...current, normal_balance: event.target.value }))}><option value="DEBIT">DEBIT</option><option value="CREDIT">CREDIT</option></select></label>
+            <label>Parent account<select value={form.parent_id} onChange={(event) => setForm((current) => ({ ...current, parent_id: event.target.value }))}><option value="">Top-level account</option>{accounts.filter((account) => account.account_type === form.account_type && account.id !== editingId).map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label>
           </div>
           <div className="opsfinance-action-row">
-            <button type="button" className="opsfinance-primary-button" disabled={saving || loading} onClick={handleCreate}>{saving ? 'Saving…' : 'Create account'}</button>
+            <button type="button" className="opsfinance-primary-button" disabled={saving || loading} onClick={handleCreate}>{saving ? 'Saving…' : editingId ? 'Save account' : 'Create account'}</button>
+            {editingId ? <button type="button" className="opsfinance-secondary-button" disabled={saving} onClick={() => { setEditingId(null); setForm({ code: '', name: '', account_type: 'ASSET', normal_balance: 'DEBIT', parent_id: '', is_active: true }); }}>Cancel</button> : null}
             <label className="opsfinance-inline-label"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))} /> Active</label>
           </div>
         </section>
@@ -109,8 +115,10 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
                   <th>Code</th>
                   <th>Name</th>
                   <th>Type</th>
+                  <th>Parent</th>
                   <th>Normal</th>
                   <th>Status</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -119,8 +127,21 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
                     <td>{account.code}</td>
                     <td>{account.name}</td>
                     <td>{account.account_type}</td>
+                    <td>{accounts.find((parent) => parent.id === account.parent_id)?.name ?? '—'}</td>
                     <td>{account.normal_balance}</td>
                     <td>{account.is_active ? 'ACTIVE' : 'INACTIVE'}</td>
+                    <td>{account.is_system ? null : <button type="button" onClick={() => {
+                      setEditingId(account.id);
+                      setForm({
+                        code: account.code,
+                        name: account.name,
+                        account_type: account.account_type,
+                        normal_balance: account.normal_balance,
+                        parent_id: account.parent_id ?? '',
+                        is_active: account.is_active,
+                      });
+                      setError(null);
+                    }}>Edit {account.name}</button>}</td>
                   </tr>
                 ))}
               </tbody>

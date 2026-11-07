@@ -39,7 +39,7 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    title: 'Accounts',
+    title: 'Accounting',
     items: [
       { href: '/accounts/financial', label: 'Financial Accounts' },
       { href: '/accounts/chart', label: 'Chart of Accounts' },
@@ -75,14 +75,14 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-function NavigationList({ isMobile = false, onNavigate }: { isMobile?: boolean; onNavigate?: () => void }) {
+function NavigationList({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
     <nav aria-label="OpsFinance navigation" className="opsfinance-nav">
       {navGroups.map((group) => (
-        <div key={group.title} className="opsfinance-nav-group">
-          <div className="opsfinance-nav-label">{group.title}</div>
+        <details key={group.title} className="opsfinance-nav-group" open={group.items.some((item) => pathname === item.href)}>
+          <summary className="opsfinance-nav-label">{group.title}</summary>
           {group.items.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
             return (
@@ -96,7 +96,7 @@ function NavigationList({ isMobile = false, onNavigate }: { isMobile?: boolean; 
               </Link>
             );
           })}
-        </div>
+        </details>
       ))}
     </nav>
   );
@@ -159,8 +159,8 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
               <Image src="/favicon.svg" alt="MYOPS brand mark" width={18} height={18} />
             </div>
             <div className="opsfinance-brand-copy">
-              <strong>OpsFinance</strong>
-              <span>Dashboard</span>
+              <strong>MYOPS</strong>
+              <span>{businessName ?? 'My account'}</span>
             </div>
           </div>
         </div>
@@ -190,8 +190,8 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
               ☰
             </button>
             <div className="opsfinance-topbar-copy">
-              <strong>OpsFinance</strong>
-              <span>Authenticated workspace</span>
+              <strong>MYOPS</strong>
+              <span>{businessName ?? 'My account'}</span>
             </div>
           </div>
 
@@ -209,7 +209,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
               <label>Current business</label>
               <strong>{businessName ?? 'No active business'}</strong>
             </div>
-            <NavigationList isMobile onNavigate={() => setMobileOpen(false)} />
+            <NavigationList onNavigate={() => setMobileOpen(false)} />
           </div>
         ) : null}
 

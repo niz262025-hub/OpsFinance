@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const db=new PGlite({extensions:{pgcrypto}});
 await db.exec(fs.readFileSync(root+'/scripts/local-supabase-emulator.sql','utf8'));
-await db.exec('create role service_role nologin bypassrls; create table auth.users(id uuid primary key)');
+await db.exec('create role service_role nologin bypassrls; create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_app_meta_data jsonb)');
 for(const file of fs.readdirSync(root+'/supabase/migrations').sort()) {
  try{await db.exec(fs.readFileSync(root+'/supabase/migrations/'+file,'utf8')); console.log('PASS replay',file)}catch(e){console.log('FAIL replay',file,e.message);process.exit(1)}
 }
@@ -85,4 +85,22 @@ assert.equal((await db.query('select count(*)::int as count from subscriptions w
 await db.exec('set role authenticated');
 await assert.rejects(db.query("select public.create_business_with_owner('   ',null,null,null,null,'MYR',null)"),/Business name must contain/);
 console.log('PASS: secure business bootstrap creates owner membership without billing or trial');
+
+await db.exec(`reset role; insert into financial_accounts(id,business_id,name,type,account_code,account_number) values('aaaaaaaa-0000-4000-8000-000000000004','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','Trial bank','BANK','TRIALBANK','12345678')`);
+const importTrial='77777777-7777-4777-8777-777777777777';
+// Replay with the same non-superuser server role used by hosted Data API RPCs.
+await db.exec('set role service_role');
+const importStatement=(n,overrides={})=>{
+ const sid=`88888888-8888-4888-8888-${String(n).padStart(12,'0')}`;
+ const statement={id:sid,business_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',uploaded_by:'11111111-1111-1111-1111-111111111111',financial_account_id:'aaaaaaaa-0000-4000-8000-000000000004',verified_account_number:'12345678',file_name:'trial.csv',file_type:'text/csv',opening_balance:0,closing_balance:1,status:'IMPORTED'};
+ const rows=[{id:`99999999-9999-4999-8999-${String(n).padStart(12,'0')}`,bank_statement_id:sid,transaction_date:'2026-11-02',description:'Trial row',amount:1,debit:0,credit:1,running_balance:1,status:'IMPORTED',...overrides}];
+ return db.query('select public.opsfinance_trial_import_statement($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7)',[statement.uploaded_by,statement.business_id,importTrial,'2099-01-01',JSON.stringify(statement),JSON.stringify(rows),'a'.repeat(64)]);
+};
+await assert.rejects(importStatement(3,{amount:-1}),/check constraint/);
+assert.equal((await db.query('select count(*)::int c from opsfinance_trial_usage where trial_id=$1',[importTrial])).rows[0].c,0);
+await importStatement(1);await importStatement(1);await importStatement(2);
+await assert.rejects(importStatement(3),/limit reached/);
+assert.equal((await db.query('select count(*)::int c from opsfinance_trial_usage where trial_id=$1',[importTrial])).rows[0].c,2);
+assert.equal((await db.query('select count(*)::int c from opsfinance_trial_import_receipts where trial_id=$1',[importTrial])).rows[0].c,2);
+console.log('PASS: actual statement import adapter, two-file limit, retry and row-error rollback');
 await db.close();

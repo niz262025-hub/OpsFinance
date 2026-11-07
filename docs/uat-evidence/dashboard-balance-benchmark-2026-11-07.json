@@ -1,0 +1,33 @@
+{
+  "fixture": "synthetic CPU work for account balance rendering, not page load time",
+  "accounts": 200,
+  "journals": 10000,
+  "warmups": 2,
+  "timedSamples": 5,
+  "before": {
+    "medianMs": 641.04,
+    "samplesMs": [
+      628.988,
+      637.146,
+      641.04,
+      656.933,
+      694.911
+    ],
+    "accountSnapshots": 400,
+    "journalSnapshots": 200,
+    "resultSha256": "f3cd60aa0579f9a07a1e27ce5c2a8140eb3ed6b89d60332372ae9ec4d7a25d32"
+  },
+  "after": {
+    "medianMs": 13.882,
+    "samplesMs": [
+      13.641,
+      13.644,
+      13.882,
+      14.472,
+      14.856
+    ],
+    "accountSnapshots": 1,
+    "journalSnapshots": 1,
+    "resultSha256": "f3cd60aa0579f9a07a1e27ce5c2a8140eb3ed6b89d60332372ae9ec4d7a25d32"
+  }
+}

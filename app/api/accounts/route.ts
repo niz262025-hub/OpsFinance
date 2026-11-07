@@ -52,7 +52,10 @@ function validateAccountPayload(payload: Record<string, unknown>, existingAccoun
   }
 
   const expectedNormalBalance = NORMAL_BALANCE_BY_TYPE[accountType as keyof typeof NORMAL_BALANCE_BY_TYPE];
-  if (normalBalance && normalBalance !== expectedNormalBalance) {
+  if (normalBalance && (normalBalance !== 'DEBIT' && normalBalance !== 'CREDIT')) {
+    throw new Error('Normal balance is invalid.');
+  }
+  if (normalBalance && accountType !== 'ASSET' && normalBalance !== expectedNormalBalance) {
     throw new Error('Normal balance does not match the account type.');
   }
 
@@ -179,7 +182,7 @@ export async function POST(request: Request) {
         account_type: validation.accountType,
         normal_balance: validation.normalBalance,
         parent_id: parentId,
-        is_system: Boolean(payload.is_system ?? payload.isSystem ?? false),
+        is_system: false,
         is_active: payload.is_active ?? payload.isActive ?? true,
       })
       .select()
@@ -228,7 +231,7 @@ export async function PUT(request: Request) {
     const validation = validateAccountPayload(payload as Record<string, unknown>, existing);
     const parentId = payload.parent_id !== undefined ? (payload.parent_id ? String(payload.parent_id).trim() : null) : (payload.parentId !== undefined ? (payload.parentId ? String(payload.parentId).trim() : null) : existing.parent_id);
 
-    if (parentId && parentId !== existing.parent_id) {
+    if (parentId && (parentId !== existing.parent_id || validation.accountType !== existing.account_type)) {
       const { data: parentRow, error: parentError } = await supabase
         .from('accounts')
         .select('id, account_type, business_id')
@@ -246,6 +249,25 @@ export async function PUT(request: Request) {
 
       if (parentRow.account_type !== validation.accountType) {
         throw new Error('Parent account type must match the child account type.');
+      }
+
+      const { data: parentRows, error: hierarchyError } = await supabase
+        .from('accounts')
+        .select('id, parent_id')
+        .eq('business_id', businessId);
+      if (hierarchyError) {
+        return NextResponse.json({ error: hierarchyError.message }, { status: 400 });
+      }
+
+      const parents = new Map((parentRows ?? []).map((account: {id: string; parent_id: string | null}) => [account.id, account.parent_id]));
+      let ancestorId: string | null = parentId;
+      const visited = new Set<string>();
+      while (ancestorId && !visited.has(ancestorId)) {
+        if (ancestorId === targetId) {
+          throw new Error('Circular parent reference detected.');
+        }
+        visited.add(ancestorId);
+        ancestorId = parents.get(ancestorId) ?? null;
       }
     }
 
