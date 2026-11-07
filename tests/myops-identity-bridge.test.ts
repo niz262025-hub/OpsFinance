@@ -21,10 +21,51 @@ beforeEach(()=>{
  client={from:vi.fn(()=>member),auth:{verifyOtp:vi.fn().mockResolvedValue({data:{user,session:{access_token:'user-jwt',expires_at:Math.floor(Date.now()/1000)+3600}},error:null}),getUser:vi.fn().mockResolvedValue({data:{user},error:null})}};
  mocks.create.mockImplementation((_url,key)=>key==='admin-secret'?admin:client);
  mocks.redeem.mockResolvedValue({session_id:sessionId,user_ref:'u'.repeat(43),product:'opsfinance',max_session_seconds:43200});
- mocks.check.mockResolvedValue(undefined);
+ mocks.check.mockResolvedValue({mode:'paid'});
 });
-afterEach(()=>vi.unstubAllEnvs());
+afterEach(()=>{vi.unstubAllEnvs();vi.useRealTimers();});
 describe('MYOPS identity to RLS-user bridge',()=>{
+ it('starts only read-only access checks together but withholds the client until central approval',async()=>{
+  const session:AppSession={version:1,sessionId,userRef:'u'.repeat(43),userId,businessId,accessToken:'user-jwt',expiresAt:Date.now()+60000};
+  mocks.cookies.mockResolvedValue({get:()=>({value:sealSession(session,'k'.repeat(48))})});
+  let approve:()=>void=()=>{};
+  mocks.check.mockImplementation(()=>new Promise(resolve=>{approve=()=>resolve({mode:'paid'});}));
+  let complete=false;
+  const pending=verifiedMyopsClient().then(value=>{complete=true;return value;});
+  await vi.waitFor(()=>expect(member.maybeSingle).toHaveBeenCalledOnce());
+  expect(mapping.maybeSingle).toHaveBeenCalledOnce();
+  expect(client.auth.getUser).toHaveBeenCalledWith('user-jwt');
+  expect(client.from.mock.calls.every(([table]:[string])=>table==='business_members')).toBe(true);
+  expect(complete).toBe(false);
+  approve();expect((await pending).user.id).toBe(userId);
+ });
+ it.each(['central','mapping','identity','membership'])('still denies access after %s revocation',async failure=>{
+  const session:AppSession={version:1,sessionId,userRef:'u'.repeat(43),userId,businessId,accessToken:'user-jwt',expiresAt:Date.now()+60000};
+  mocks.cookies.mockResolvedValue({get:()=>({value:sealSession(session,'k'.repeat(48))})});
+  if(failure==='central')mocks.check.mockRejectedValue(new Error('MYOPS access denied.'));
+  if(failure==='mapping')mapping.maybeSingle.mockResolvedValue({data:{supabase_user_id:businessId,business_id:businessId},error:null});
+  if(failure==='identity')client.auth.getUser.mockResolvedValue({data:{user:{id:businessId}},error:null});
+  if(failure==='membership')member.maybeSingle.mockResolvedValue({data:null,error:null});
+  const originalGetUser=client.auth.getUser;
+  await expect(verifiedMyopsClient()).rejects.toThrow();
+  expect(client.myopsBusinessId).toBeUndefined();
+  expect(client.auth.getUser).toBe(originalGetUser);
+ });
+ it('completes independent network checks in one latency group rather than two',async()=>{
+  vi.useFakeTimers();
+  const session:AppSession={version:1,sessionId,userRef:'u'.repeat(43),userId,businessId,accessToken:'user-jwt',expiresAt:Date.now()+60000};
+  mocks.cookies.mockResolvedValue({get:()=>({value:sealSession(session,'k'.repeat(48))})});
+  const later=<T,>(value:T,ms:number)=>new Promise<T>(resolve=>setTimeout(()=>resolve(value),ms));
+  mocks.check.mockImplementation(()=>later({mode:'paid'},120));
+  mapping.maybeSingle.mockImplementation(()=>later({data:{supabase_user_id:userId,business_id:businessId},error:null},180));
+  client.auth.getUser.mockImplementation(()=>later({data:{user},error:null},140));
+  member.maybeSingle.mockImplementation(()=>later({data:{business_id:businessId},error:null},100));
+  let complete=false;
+  const pending=verifiedMyopsClient().then(()=>{complete=true;});
+  await vi.advanceTimersByTimeAsync(180);
+  expect(complete).toBe(true);
+  await pending;
+ });
  it('only mints a session for the preprovisioned, confirmed identity and membership',async()=>{
   const session=await establishMyopsSession('t'.repeat(43));
   expect(mapping.eq).toHaveBeenCalledWith('user_ref','u'.repeat(43));expect(mapping.eq).toHaveBeenCalledWith('enabled',true);

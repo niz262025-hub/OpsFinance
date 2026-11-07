@@ -12,8 +12,8 @@ function clients() {
   if (!url || !key || !adminKey) throw new Error('SSO identity bridge is not configured.');
   return { url, key, admin: createClient(url, adminKey, { auth: { persistSession: false, autoRefreshToken: false },global:{headers:myopsBrokerHeaders()} }) };
 }
-async function mappedIdentity(userRef: string) {
-  const { url, key, admin } = clients();
+async function mappedIdentity(userRef: string, configured = clients()) {
+  const { url, key, admin } = configured;
   const { data: mapping, error } = await admin.from('myops_identity_links')
     .select('supabase_user_id,business_id').eq('user_ref', userRef).eq('enabled',true).maybeSingle();
   if (error || !mapping) {
@@ -48,17 +48,19 @@ export async function verifiedMyopsClient(activity = false) {
   const config = ssoConfig();
   const session = openSession((await cookies()).get(MYOPS_COOKIE)?.value,config.secret);
   if (!session) throw new Error('MYOPS authentication required.');
-  const [, { url,key,mapping }] = await Promise.all([
-    measureMyopsPhase('central_entitlement', () => checkMyopsEntitlement(config.transport,session.sessionId,activity)),
-    measureMyopsPhase('identity_mapping', () => mappedIdentity(session.userRef)),
-  ]);
-  if (mapping.supabase_user_id !== session.userId || mapping.business_id !== session.businessId) throw new Error('Identity mapping revoked.');
+  const configured = clients();
+  const { url, key, admin } = configured;
   const client = createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{...myopsBrokerHeaders(),Authorization:`Bearer ${session.accessToken}`}}});
-  const [{ data, error }, { data: member,error: memberError }] = await Promise.all([
+  // These are independent, read-only access checks. No business data client is
+  // returned until all four checks pass; nothing is cached between requests.
+  const [access, { mapping }, { data, error }, { data: member, error: memberError }] = await Promise.all([
+    measureMyopsPhase('central_entitlement', () => checkMyopsEntitlement(config.transport,session.sessionId,activity)),
+    measureMyopsPhase('identity_mapping', () => mappedIdentity(session.userRef, configured)),
     measureMyopsPhase('local_identity', () => client.auth.getUser(session.accessToken)),
     measureMyopsPhase('local_membership', () => client.from('business_members').select('business_id')
       .eq('user_id',session.userId).eq('business_id',session.businessId).maybeSingle()),
   ]);
+  if (mapping.supabase_user_id !== session.userId || mapping.business_id !== session.businessId) throw new Error('Identity mapping revoked.');
   if (error || data.user?.id !== session.userId) throw new Error('Local identity is no longer valid.');
   if (memberError || !member) throw new Error('Business membership revoked.');
   // Existing server pages call auth.getUser() without passing a token.
