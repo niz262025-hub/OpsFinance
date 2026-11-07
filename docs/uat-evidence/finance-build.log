@@ -1,0 +1,71 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> opsfinance@0.1.0 build
+> next build
+
+   ▲ Next.js 15.5.28
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 4.0s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/43) ...
+   Generating static pages (10/43) 
+   Generating static pages (21/43) 
+   Generating static pages (32/43) 
+ ✓ Generating static pages (43/43)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size  First Load JS
+┌ ○ /                                      172 B         103 kB
+├ ○ /_not-found                             1 kB         104 kB
+├ ○ /accounts                              185 B         181 kB
+├ ƒ /accounts/chart                      1.88 kB         183 kB
+├ ƒ /accounts/financial                  3.21 kB         184 kB
+├ ƒ /api/accounts                          172 B         103 kB
+├ ƒ /api/financial-accounts                172 B         103 kB
+├ ƒ /api/myops/activity                    172 B         103 kB
+├ ƒ /api/myops/data/[...path]              172 B         103 kB
+├ ƒ /api/myops/launch                      172 B         103 kB
+├ ƒ /api/myops/logout                      172 B         103 kB
+├ ƒ /api/payments/checkout                 172 B         103 kB
+├ ƒ /api/payments/webhook                  172 B         103 kB
+├ ƒ /api/preview/data                      172 B         103 kB
+├ ƒ /api/reconciliation                    172 B         103 kB
+├ ƒ /api/transactions                      172 B         103 kB
+├ ƒ /api/upload                            172 B         103 kB
+├ ƒ /auth/callback                         172 B         103 kB
+├ ƒ /dashboard                           3.47 kB         190 kB
+├ ○ /icon.svg                                0 B            0 B
+├ ○ /launch                                716 B         103 kB
+├ ○ /login                               2.02 kB         180 kB
+├ ƒ /opsfinance                            172 B         103 kB
+├ ƒ /reconciliation                      2.44 kB         184 kB
+├ ○ /register                            2.56 kB         181 kB
+├ ƒ /reports                               137 B         192 kB
+├ ƒ /reports/account-statement             137 B         192 kB
+├ ƒ /reports/balance-sheet                 137 B         192 kB
+├ ƒ /reports/general-ledger                138 B         192 kB
+├ ƒ /reports/profit-loss                   138 B         192 kB
+├ ƒ /reports/trial-balance                 137 B         192 kB
+├ ○ /settings                              185 B         181 kB
+├ ƒ /settings/accounting                 1.74 kB         183 kB
+├ ƒ /settings/accounting-rules             726 B         182 kB
+├ ƒ /settings/business                    2.1 kB         183 kB
+├ ○ /settings/subscription                 172 B         103 kB
+├ ƒ /transactions                          134 B         183 kB
+├ ƒ /transactions/journal                  134 B         183 kB
+├ ƒ /transactions/money-in                 134 B         183 kB
+├ ƒ /transactions/money-out                134 B         183 kB
+├ ƒ /transactions/transfer                 135 B         183 kB
+└ ƒ /upload                              2.94 kB         184 kB
++ First Load JS shared by all             103 kB
+  ├ chunks/1255-dc3ddf72a1dc71a7.js      46.6 kB
+  ├ chunks/4bd1b696-f785427dddbba9fb.js  54.2 kB
+  └ other shared chunks (total)          1.93 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

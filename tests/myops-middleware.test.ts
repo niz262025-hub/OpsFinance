@@ -27,5 +27,15 @@ describe('SSO middleware boundary',()=>{
  });
  it('replaces local sign-in with the fixed MYOPS account destination',async()=>{
   expect((await middleware(request('/login?next=https://attacker.example'))).headers.get('location')).toBe('https://portal.example/login');
+  expect((await middleware(request('/register'))).headers.get('location')).toBe('https://portal.example/register');
+ });
+ it.each(['preview','production'])('fails closed in %s if SSO configuration is disabled instead of enabling a local account',async environment=>{
+  vi.stubEnv('VERCEL_ENV',environment);vi.stubEnv('MYOPS_SSO_ENABLED','false');
+  expect((await middleware(request('/login'))).headers.get('location')).toBe('https://portal.example/login');
+  expect((await middleware(request('/register'))).headers.get('location')).toBe('https://portal.example/register');
+  for(const path of ['/dashboard','/reports/general-ledger','/api/accounts']){
+   const response=await middleware(request(path));expect(response.status).toBe(503);
+   expect(response.headers.get('cache-control')).toContain('no-store');
+  }
  });
 });
