@@ -208,6 +208,14 @@ button, input, textarea, select {
   color: #b42318;
 }
 
+.opsfinance-login-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 12px;
+}
+
 .opsfinance-login-links {
   display: flex;
   justify-content: space-between;
@@ -463,6 +471,26 @@ button, input, textarea, select {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.opsfinance-language-picker {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 12px;
+  border: 1px solid rgba(7, 27, 73, 0.08);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 10px 18px rgba(7, 27, 73, 0.04);
+}
+
+.opsfinance-language-picker select {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+  padding: 0.68rem 0.9rem;
+  min-width: 130px;
+  cursor: pointer;
 }
 
 .opsfinance-business-pill {
