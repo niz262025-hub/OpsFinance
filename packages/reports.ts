@@ -43,6 +43,13 @@ export interface AccountStatementReport {
   transactions: AccountStatementRow[];
 }
 
+export interface AccountBalanceSummary {
+  accountId: string;
+  accountName: string;
+  accountType: string;
+  closingBalance: string;
+}
+
 export interface TrialBalanceRow {
   accountId: string;
   accountCode: string;
@@ -318,6 +325,28 @@ export class FinancialReportService {
       totalDebit: totalDebit.toString(),
       totalCredit: totalCredit.toString(),
     };
+  }
+
+  /** All-time posted balances from one tenant-scoped snapshot; no statement rows or sorting. */
+  getAccountBalances(input: { businessId: string }): AccountBalanceSummary[] {
+    this.engine.authorizeBusiness(input.businessId, this.engine.businessId);
+    const accounts = this.getBusinessAccounts(input.businessId).filter(account => account.businessId === input.businessId);
+    const byId = new Map(accounts.map(account => [account.id, account]));
+    const balances = new Map<string, DecimalMoney>();
+    for (const journal of this.getPostedJournals(input.businessId)) {
+      if (journal.businessId !== input.businessId || journal.status !== 'POSTED') continue;
+      for (const line of journal.lines) {
+        const account = byId.get(line.accountId);
+        if (!account) continue;
+        balances.set(account.id, (balances.get(account.id) ?? DecimalMoney.zero()).add(this.getBalanceImpact(account, line)));
+      }
+    }
+    return accounts.map(account => ({
+      accountId: account.id,
+      accountName: account.name,
+      accountType: account.accountType,
+      closingBalance: (balances.get(account.id) ?? DecimalMoney.zero()).toString(),
+    }));
   }
 
   getAccountStatement(input: {
