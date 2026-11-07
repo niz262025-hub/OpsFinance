@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 type TransactionWorkflowProps = { businessId?: string; defaultType?: 'MONEY_IN' | 'MONEY_OUT' | 'TRANSFER' | 'JOURNAL' };
 
@@ -28,15 +28,24 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
   const [financialAccounts, setFinancialAccounts] = useState<Array<any>>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const posting = useRef(false);
   const [form, setForm] = useState<TransactionFormState>({
     type: defaultType,
-    date: '2026-10-05',
-    description: 'Real DB posting',
-    amount: '100.00',
-    reference_no: 'UI-POST-001',
+    date: '',
+    description: '',
+    amount: '',
+    reference_no: '',
     financial_account_id: '',
     account_id: '',
   });
+
+  useEffect(() => {
+    const today = new Date();
+    const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    setForm(current => ({ ...current, date: current.date || localDate }));
+  }, []);
 
   const loadData = useCallback(async () => {
     if (!businessId) return;
@@ -53,11 +62,6 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
       setAccounts(payload.accounts ?? []);
       setFinancialAccounts(payload.financialAccounts ?? []);
       setTransactions(payload.transactions ?? []);
-      setForm((current) => ({
-        ...current,
-        financial_account_id: payload.financialAccounts?.[0]?.id ?? '',
-        account_id: payload.accounts?.[0]?.id ?? '',
-      }));
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Could not load transaction data.');
     } finally {
@@ -70,11 +74,28 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
   }, [loadData]);
 
   const handleCreate = async () => {
+    if (posting.current || loading) return;
+    setSuccess(false);
     if (!businessId || !form.financial_account_id || !form.account_id) {
       setError('Select a financial account and general ledger account before posting.');
       return;
     }
 
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) {
+      setError('Choose a transaction date before posting.');
+      return;
+    }
+    if (!/^\d+(?:\.\d{1,2})?$/.test(form.amount.trim()) || !Number.isFinite(Number(form.amount)) || Number(form.amount) <= 0) {
+      setError('Enter an amount greater than RM0 with no more than two decimal places.');
+      return;
+    }
+    if (!form.description.trim()) {
+      setError('Enter a description before posting.');
+      return;
+    }
+
+    posting.current = true;
+    setSaving(true);
     try {
       const response = await fetch('/api/transactions', {
         method: 'POST',
@@ -83,9 +104,9 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
           businessId,
           type: form.type,
           date: form.date,
-          description: form.description,
-          amount: form.amount,
-          reference_no: form.reference_no,
+          description: form.description.trim(),
+          amount: form.amount.trim(),
+          reference_no: form.reference_no.trim(),
           financial_account_id: form.financial_account_id,
           account_id: form.account_id,
         }),
@@ -97,9 +118,14 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
       }
 
       setError(null);
+      setForm(current => ({ ...current, amount: '', description: '', reference_no: '' }));
+      setSuccess(true);
       await loadData();
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Transaction could not be created.');
+    } finally {
+      posting.current = false;
+      setSaving(false);
     }
   };
 
@@ -148,22 +174,23 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
           <div className="opsfinance-form-grid">
             <label>Type<select value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as TransactionFormState['type'] }))}><option value="MONEY_IN">Money In</option><option value="MONEY_OUT">Money Out</option><option value="TRANSFER">Transfer</option><option value="JOURNAL">Journal</option></select></label>
             <label>Date<input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} /></label>
-            <label>Amount<input value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} /></label>
+            <label>Amount<input inputMode="decimal" autoComplete="off" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} /></label>
           </div>
           <div className="opsfinance-form-grid">
-            <label>Financial account<select value={form.financial_account_id} onChange={(event) => setForm((current) => ({ ...current, financial_account_id: event.target.value }))}>{financialAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
-            <label>Ledger account<select value={form.account_id} onChange={(event) => setForm((current) => ({ ...current, account_id: event.target.value }))}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+            <label>Financial account<select value={form.financial_account_id} onChange={(event) => setForm((current) => ({ ...current, financial_account_id: event.target.value }))}><option value="">Select a financial account</option>{financialAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+            <label>Ledger account<select value={form.account_id} onChange={(event) => setForm((current) => ({ ...current, account_id: event.target.value }))}><option value="">Select a ledger account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
           </div>
           <div className="opsfinance-form-grid">
             <label>Description<input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} /></label>
             <label>Reference<input value={form.reference_no} onChange={(event) => setForm((current) => ({ ...current, reference_no: event.target.value }))} /></label>
           </div>
-          <button type="button" className="opsfinance-primary-button" onClick={handleCreate}>Create posting</button>
+          <button type="button" className="opsfinance-primary-button" disabled={loading || saving} onClick={handleCreate}>{saving ? 'Posting…' : 'Create posting'}</button>
         </section>
 
         {error ? <div role="alert" className="opsfinance-surface" style={{ background: '#fff1f2', border: '1px solid #fecdd3', padding: '1rem' }}>{error}</div> : null}
+        {success ? <div role="status" className="opsfinance-surface" style={{ padding: '1rem' }}>Transaction posted successfully.</div> : null}
 
-        <section className="opsfinance-surface" style={{ padding: '1rem' }}>
+        <section className="opsfinance-surface" style={{ padding: '1rem', overflowX: 'auto' }} aria-label="Recent transactions">
           {loading ? <div>Loading transactions…</div> : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
