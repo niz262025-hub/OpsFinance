@@ -9,7 +9,9 @@ export function financeAccessFromEntitlement(value:unknown, trialReady:boolean, 
  if(data.access_mode==='paid'&&data.trial==null)return {mode:'paid'};
  // Existing signed paid contracts predate access_mode; never treat explicit trials as paid.
  if(data.access_mode==null&&data.trial==null)return {mode:'paid'};
- if(data.access_mode!=='trial'||!trialReady)throw new Error('OpsFinance trial is not available yet. Manage your access in MYOPS.');
+ // Central MYOPS entitlement is the source of truth. A production app must not add
+ // its own preview-only rollout gate on top of the signed trial grant.
+ if(data.access_mode!=='trial')throw new Error('OpsFinance trial is not available yet. Manage your access in MYOPS.');
  const trial=data.trial as Record<string,unknown>|null;
  if(!trial||typeof trial.id!=='string'||!UUID.test(trial.id)||trial.policy_version!==1||typeof trial.expires_at!=='string'||!Number.isFinite(Date.parse(trial.expires_at))||Date.parse(trial.expires_at)<=now)throw new Error('MYOPS trial expired or unavailable.');
  return {mode:'trial',trialId:trial.id,expiresAt:trial.expires_at,policyVersion:1};

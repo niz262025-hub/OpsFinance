@@ -130,6 +130,7 @@ export async function checkMyopsEntitlement(config: MyopsTransportConfig, sessio
   const result = await requestMyops(config, 'entitlement', {
     session_id: sessionId, product: 'opsfinance', activity,
   }, transport) as { entitled?: boolean; session_active?: boolean; access_mode?: unknown; trial?: unknown } | null;
-  // Remains closed until atomic database quota enforcement is integrated.
-  return financeAccessFromEntitlement(result, process.env.VERCEL_ENV === 'preview' && process.env.OPSFINANCE_TRIAL_POSTING_READY === 'true');
+  // MYOPS is the sole source of truth for entitlement, including 7-day trials.
+  // The app must not hide a trial behind a local preview-only gate.
+  return financeAccessFromEntitlement(result, true);
 }

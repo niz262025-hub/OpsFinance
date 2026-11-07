@@ -4,8 +4,8 @@ import {assertFinanceFeature,financeAccessFromEntitlement,financeTrialLimit} fro
 const now=Date.parse('2026-11-02T00:00:00Z');
 const trial={id:'11111111-1111-4111-8111-111111111111',expires_at:'2026-11-03T00:00:00Z',policy_version:1};
 const active={entitled:true,session_active:true,access_mode:'trial',trial};
-it('requires an explicit rollout gate and fresh signed trial metadata',()=>{
- expect(()=>financeAccessFromEntitlement(active,false,now)).toThrow();
+it('accepts central MYOPS trial entitlement and validates fresh signed metadata',()=>{
+ expect(financeAccessFromEntitlement(active,false,now).mode).toBe('trial');
  expect(financeAccessFromEntitlement(active,true,now).mode).toBe('trial');
  for(const patch of [{expires_at:'2026-11-02T00:00:00Z'},{expires_at:'invalid'},{id:'other'},{policy_version:2}])expect(()=>financeAccessFromEntitlement({...active,trial:{...trial,...patch}},true,now)).toThrow();
  for(const patch of [{entitled:false},{session_active:false},{access_mode:'unknown'},{trial:null}])expect(()=>financeAccessFromEntitlement({...active,...patch},true,now)).toThrow();
