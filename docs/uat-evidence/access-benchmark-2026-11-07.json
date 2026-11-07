@@ -1,0 +1,33 @@
+{
+  "fixture": "simulated read-only access-check latency; no real network",
+  "latencyMs": {
+    "central": 120,
+    "mapping": 180,
+    "identity": 140,
+    "membership": 100
+  },
+  "warmups": 2,
+  "timedSamples": 5,
+  "before": {
+    "medianMs": 321.381,
+    "samplesMs": [
+      319.848,
+      320.46,
+      321.381,
+      322.339,
+      326.016
+    ],
+    "resultSha256": "29214366138b95b89f97a57b541a883dea48e7f017bfc5ec7fb69dbc46d65d4a"
+  },
+  "after": {
+    "medianMs": 179.973,
+    "samplesMs": [
+      179.505,
+      179.838,
+      179.973,
+      180.998,
+      181.132
+    ],
+    "resultSha256": "29214366138b95b89f97a57b541a883dea48e7f017bfc5ec7fb69dbc46d65d4a"
+  }
+}

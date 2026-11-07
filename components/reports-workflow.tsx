@@ -19,6 +19,19 @@ const formatMoney = (value: string | number | undefined) => {
   return `RM${numeric.toFixed(2)}`;
 };
 
+type ReportTransaction = { date: string; journalNo: string; description: string; debit: string; credit: string; balance?: string; runningBalance?: string };
+const reportCellStyle: React.CSSProperties = { padding: '0.6rem', textAlign: 'left', borderBottom: '1px solid #e2e8f0' };
+function ReportTransactions({ rows }: { rows: ReportTransaction[] }) {
+  if (!rows.length) return <p>No posted transactions in this period.</p>;
+  return <div style={{ overflowX: 'auto' }}><table aria-label="Posted transactions" style={{ width: '100%', borderCollapse: 'collapse' }}>
+    <thead><tr>{['Date', 'Journal', 'Description', 'Debit', 'Credit', 'Balance'].map(label => <th key={label} scope="col" style={reportCellStyle}>{label}</th>)}</tr></thead>
+    <tbody>{rows.map((row, index) => <tr key={`${row.journalNo}-${index}`}>
+      <td style={reportCellStyle}>{row.date}</td><td style={reportCellStyle}>{row.journalNo}</td><td style={reportCellStyle}>{row.description}</td>
+      <td style={reportCellStyle}>{formatMoney(row.debit)}</td><td style={reportCellStyle}>{formatMoney(row.credit)}</td><td style={reportCellStyle}>{formatMoney(row.balance ?? row.runningBalance)}</td>
+    </tr>)}</tbody>
+  </table></div>;
+}
+
 export function ReportsWorkflow({ businessId, businessContextError, defaultReport = 'trial' }: ReportsWorkflowProps) {
   const [report, setReport] = useState<'ledger' | 'statement' | 'trial' | 'pnl' | 'sheet' | 'cash'>(defaultReport);
   const [dateFrom, setDateFrom] = useState('2026-10-01');
@@ -31,12 +44,14 @@ export function ReportsWorkflow({ businessId, businessContextError, defaultRepor
   const [cash, setCash] = useState<any>(null);
   const [ledger, setLedger] = useState<any>(null);
   const [statement, setStatement] = useState<any>(null);
+  const [reportSource, setReportSource] = useState<{ businessId: string; service: FinancialReportService } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       if (!businessId) {
+        setReportSource(null);
         setAccounts([]);
         setTrial(null);
         setPnl(null);
@@ -58,8 +73,9 @@ export function ReportsWorkflow({ businessId, businessContextError, defaultRepor
           repository,
         });
 
+        setReportSource({ businessId, service });
         setAccounts(accountsList);
-        setSelectedAccountId((accountsList[0]?.id ?? ''));
+        setSelectedAccountId(current => accountsList.some(account => account.id === current) ? current : (accountsList[0]?.id ?? ''));
         setTrial(service.getTrialBalance({ businessId, dateFrom, dateTo }));
         setPnl(service.getProfitAndLoss({ businessId, dateFrom, dateTo }));
         setSheet(service.getBalanceSheet({ businessId, dateFrom, dateTo }));
@@ -80,6 +96,7 @@ export function ReportsWorkflow({ businessId, businessContextError, defaultRepor
       }
 
       setLoading(true);
+      setError(null);
       try {
         const { data: accountRows, error: accountError } = await client.from('accounts').select('*').eq('business_id', businessId).order('code', { ascending: true });
         if (accountError) throw new Error(accountError.message);
@@ -134,8 +151,9 @@ export function ReportsWorkflow({ businessId, businessContextError, defaultRepor
           repository,
         });
 
+        setReportSource({ businessId, service });
         setAccounts(mappedAccounts);
-        setSelectedAccountId((mappedAccounts[0]?.id ?? ''));
+        setSelectedAccountId(current => mappedAccounts.some(account => account.id === current) ? current : (mappedAccounts[0]?.id ?? ''));
         setTrial(service.getTrialBalance({ businessId, dateFrom, dateTo }));
         setPnl(service.getProfitAndLoss({ businessId, dateFrom, dateTo }));
         setSheet(service.getBalanceSheet({ businessId, dateFrom, dateTo }));
@@ -155,36 +173,11 @@ export function ReportsWorkflow({ businessId, businessContextError, defaultRepor
   }, [businessId, dateFrom, dateTo]);
 
   useEffect(() => {
-    if (!businessId || !selectedAccountId) return;
-
-    const isPreviewBusiness = isPreviewAuthBypassEnabled() || businessId === PREVIEW_BUSINESS_ID;
-    if (isPreviewBusiness) {
-      const snapshot = getPreviewFinancialSnapshot();
-      const service = new FinancialReportService({
-        engine: new AccountingEngine({ businessId, accounts: snapshot.accounts as BusinessAccount[] }),
-        repository: getPreviewReportRepository(),
-      });
-      setStatement(service.getAccountStatement({ businessId, accountId: selectedAccountId, dateFrom, dateTo }));
-      return;
-    }
-
-    const client = getSupabaseBrowserClient();
-    if (!client) return;
-
-    const instance = new AccountingEngine({ businessId, accounts });
-    const service = new FinancialReportService({
-      engine: instance,
-      repository: {
-        getBusinessAccounts: () => accounts,
-        getPostedJournals: () => [],
-      },
-    });
-
-    if (accounts.length > 0) {
-      const statementReport = service.getAccountStatement({ businessId, accountId: selectedAccountId, dateFrom, dateTo });
-      setStatement(statementReport);
-    }
-  }, [selectedAccountId, businessId, dateFrom, dateTo, accounts]);
+    if (!businessId || !selectedAccountId || reportSource?.businessId !== businessId) return;
+    const input = { businessId, accountId: selectedAccountId, dateFrom, dateTo };
+    setLedger(reportSource.service.getGeneralLedger(input));
+    setStatement(reportSource.service.getAccountStatement(input));
+  }, [selectedAccountId, businessId, dateFrom, dateTo, reportSource]);
 
   const rowData = report === 'ledger' ? ledger : report === 'trial' ? trial : report === 'pnl' ? pnl : report === 'sheet' ? sheet : report === 'cash' ? cash : statement;
 
@@ -322,6 +315,7 @@ export function ReportsWorkflow({ businessId, businessContextError, defaultRepor
               <div>
                 <h2>General Ledger</h2>
                 <p>Closing Balance: {formatMoney(ledger?.closingBalance ?? '0.00')}</p>
+                <ReportTransactions rows={ledger?.rows ?? []} />
               </div>
             ) : null}
 
@@ -329,6 +323,7 @@ export function ReportsWorkflow({ businessId, businessContextError, defaultRepor
               <div>
                 <h2>Account Statement</h2>
                 <p>Closing Balance: {formatMoney(statement?.closingBalance ?? '0.00')}</p>
+                <ReportTransactions rows={statement?.transactions ?? []} />
               </div>
             ) : null}
           </section>

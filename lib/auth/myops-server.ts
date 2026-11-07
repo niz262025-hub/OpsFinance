@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { MYOPS_COOKIE, openSession, ssoConfig, type AppSession } from './myops-session';
 import { checkMyopsEntitlement, redeemMyopsTicket } from './myops-transport';
 import { myopsBrokerHeaders } from './myops-broker';
+import { measureMyopsPhase } from './myops-performance';
 
 function clients() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -13,8 +14,8 @@ function clients() {
   if (!url || !key || !adminKey) throw new Error('SSO identity bridge is not configured.');
   return { url, key, admin: createClient(url, adminKey, { auth: { persistSession: false, autoRefreshToken: false },global:{headers:myopsBrokerHeaders()} }) };
 }
-async function mappedIdentity(userRef: string, onboardingProfile?: unknown) {
-  const { url, key, admin } = clients();
+async function mappedIdentity(userRef: string, configured = clients(), onboardingProfile?: unknown) {
+  const { url, key, admin } = configured;
   const { data: existing, error } = await admin.from('myops_identity_links')
     .select('supabase_user_id,business_id').eq('user_ref', userRef).eq('enabled',true).maybeSingle();
   let mapping=existing;
@@ -34,7 +35,7 @@ export async function establishMyopsSession(ticket: string): Promise<AppSession>
   const grant = await redeemMyopsTicket(config.transport, ticket);
   // Check access before provisioning or minting any local identity/session.
   await checkMyopsEntitlement(config.transport,grant.session_id,true);
-  const { url, key, admin, mapping } = await mappedIdentity(grant.user_ref,grant.onboarding_profile);
+  const { url, key, admin, mapping } = await mappedIdentity(grant.user_ref,clients(),grant.onboarding_profile);
   const { data: identity, error: identityError } = await admin.auth.admin.getUserById(mapping.supabase_user_id);
   const user = identity.user;
   if (identityError || !user?.email || !user.email_confirmed_at) throw new Error('Mapped identity is unavailable.');
@@ -56,17 +57,19 @@ export async function verifiedMyopsClient(activity = false) {
   const config = ssoConfig();
   const session = openSession((await cookies()).get(MYOPS_COOKIE)?.value,config.secret);
   if (!session) throw new Error('MYOPS authentication required.');
-  const [access, { url,key,admin,mapping }] = await Promise.all([
-    checkMyopsEntitlement(config.transport,session.sessionId,activity),
-    mappedIdentity(session.userRef),
+  const configured = clients();
+  const { url, key, admin } = configured;
+  const client = createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{...myopsBrokerHeaders(),Authorization:`Bearer ${session.accessToken}`}}});
+  // These are independent, read-only access checks. No business data client is
+  // returned until all four checks pass; nothing is cached between requests.
+  const [access, { mapping }, { data, error }, { data: member, error: memberError }] = await Promise.all([
+    measureMyopsPhase('central_entitlement', () => checkMyopsEntitlement(config.transport,session.sessionId,activity)),
+    measureMyopsPhase('identity_mapping', () => mappedIdentity(session.userRef, configured)),
+    measureMyopsPhase('local_identity', () => client.auth.getUser(session.accessToken)),
+    measureMyopsPhase('local_membership', () => client.from('business_members').select('business_id')
+      .eq('user_id',session.userId).eq('business_id',session.businessId).maybeSingle()),
   ]);
   if (mapping.supabase_user_id !== session.userId || mapping.business_id !== session.businessId) throw new Error('Identity mapping revoked.');
-  const client = createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{...myopsBrokerHeaders(),Authorization:`Bearer ${session.accessToken}`}}});
-  const [{ data, error }, { data: member,error: memberError }] = await Promise.all([
-    client.auth.getUser(session.accessToken),
-    client.from('business_members').select('business_id')
-      .eq('user_id',session.userId).eq('business_id',session.businessId).maybeSingle(),
-  ]);
   if (error || data.user?.id !== session.userId) throw new Error('Local identity is no longer valid.');
   if (memberError || !member) throw new Error('Business membership revoked.');
   // Existing server pages call auth.getUser() without passing a token.

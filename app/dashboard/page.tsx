@@ -34,11 +34,7 @@ export default async function DashboardPage() {
   return (
     <AuthenticatedAppShell businessName={business?.name ?? 'No active business'} userEmail={user.email ?? user.id}>
       <DashboardWorkflow businessId={business?.id ?? undefined} businessName={business?.name ?? 'No active business'} />
-      <div style={{ padding: '1rem 0 0' }}>
-        <p>Authenticated user: {user.email ?? user.id}</p>
-        <p>{business ? `Current business: ${business.name}` : 'No business is yet linked to this user. A real business is being resolved from Supabase.'}</p>
-        {contextError ? <p style={{ color: '#b91c1c' }}>{contextError}</p> : null}
-      </div>
+      {contextError ? <p role="alert" style={{ color: '#b91c1c' }}>Your business could not be loaded. Please try again.</p> : null}
     </AuthenticatedAppShell>
   );
 }
