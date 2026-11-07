@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { MYOPS_COOKIE, openSession, ssoConfig, type AppSession } from './myops-session';
 import { checkMyopsEntitlement, redeemMyopsTicket } from './myops-transport';
 import { myopsBrokerHeaders } from './myops-broker';
+import { measureMyopsPhase } from './myops-performance';
 
 function clients() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -48,15 +49,15 @@ export async function verifiedMyopsClient(activity = false) {
   const session = openSession((await cookies()).get(MYOPS_COOKIE)?.value,config.secret);
   if (!session) throw new Error('MYOPS authentication required.');
   const [, { url,key,mapping }] = await Promise.all([
-    checkMyopsEntitlement(config.transport,session.sessionId,activity),
-    mappedIdentity(session.userRef),
+    measureMyopsPhase('central_entitlement', () => checkMyopsEntitlement(config.transport,session.sessionId,activity)),
+    measureMyopsPhase('identity_mapping', () => mappedIdentity(session.userRef)),
   ]);
   if (mapping.supabase_user_id !== session.userId || mapping.business_id !== session.businessId) throw new Error('Identity mapping revoked.');
   const client = createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{...myopsBrokerHeaders(),Authorization:`Bearer ${session.accessToken}`}}});
   const [{ data, error }, { data: member,error: memberError }] = await Promise.all([
-    client.auth.getUser(session.accessToken),
-    client.from('business_members').select('business_id')
-      .eq('user_id',session.userId).eq('business_id',session.businessId).maybeSingle(),
+    measureMyopsPhase('local_identity', () => client.auth.getUser(session.accessToken)),
+    measureMyopsPhase('local_membership', () => client.from('business_members').select('business_id')
+      .eq('user_id',session.userId).eq('business_id',session.businessId).maybeSingle()),
   ]);
   if (error || data.user?.id !== session.userId) throw new Error('Local identity is no longer valid.');
   if (memberError || !member) throw new Error('Business membership revoked.');
