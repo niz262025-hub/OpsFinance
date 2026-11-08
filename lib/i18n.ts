@@ -3,6 +3,7 @@ export type Locale = 'en' | 'ms' | 'zh-CN' | 'ta';
 export const DEFAULT_LOCALE: Locale = 'en';
 export const SUPPORTED_LOCALES: Locale[] = ['en', 'ms', 'zh-CN', 'ta'];
 export const STORAGE_KEY = 'opsfinance-locale';
+let transientLocale:Locale|null=null;
 
 export function resolveLocale(value?: string | null): Locale {
   if (!value) return getBrowserLocale();
@@ -29,6 +30,7 @@ export function getBrowserLocale(): Locale {
 
 export function getStoredLocale(): Locale {
   if (typeof window === 'undefined') return DEFAULT_LOCALE;
+  if(transientLocale)return transientLocale;
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     return resolveLocale(stored);
@@ -41,12 +43,14 @@ export function persistLocale(locale: Locale): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(STORAGE_KEY, locale);
+    transientLocale=null;
   } catch {
-    // Ignore storage failures to keep the app usable.
+    transientLocale=locale; // Selection still works when the browser blocks persistence.
   }
   if (typeof document !== 'undefined') {
     document.documentElement.lang = locale;
   }
+  window.dispatchEvent(new Event('opsfinance:localechange'));
 }
 
 export const localeLabels: Record<Locale, string> = {
@@ -57,6 +61,7 @@ export const localeLabels: Record<Locale, string> = {
 };
 
 export type TranslationKey =
+  | 'transactionsGroup' | 'accountingGroup' | 'uploadGroup' | 'reportsGroup' | 'settingsGroup'
   | 'language'
   | 'languageSelector'
   | 'email'
@@ -113,6 +118,12 @@ export type TranslationKey =
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
   en: {
+    transactionsGroup: 'Transactions',
+    accountingGroup: 'Accounting',
+    uploadGroup: 'Upload & Convert',
+    reportsGroup: 'Reports',
+    settingsGroup: 'Settings',
+
     language: 'Language',
     languageSelector: 'Select language',
     email: 'Email',
@@ -168,6 +179,12 @@ export const translations: Record<Locale, Record<TranslationKey, string>> = {
     logoutMessage: 'Session expired. Returning to MYOPS login…',
   },
   ms: {
+    transactionsGroup: 'Transaksi',
+    accountingGroup: 'Perakaunan',
+    uploadGroup: 'Muat Naik & Tukar',
+    reportsGroup: 'Laporan',
+    settingsGroup: 'Tetapan',
+
     language: 'Bahasa',
     languageSelector: 'Pilih bahasa',
     email: 'E-mel',
@@ -223,6 +240,12 @@ export const translations: Record<Locale, Record<TranslationKey, string>> = {
     logoutMessage: 'Sesi tamat. Mengembalikan ke log masuk MYOPS…',
   },
   'zh-CN': {
+    transactionsGroup: '交易',
+    accountingGroup: '会计',
+    uploadGroup: '上传与转换',
+    reportsGroup: '报表',
+    settingsGroup: '设置',
+
     language: '语言',
     languageSelector: '选择语言',
     email: '电子邮件',
@@ -278,6 +301,12 @@ export const translations: Record<Locale, Record<TranslationKey, string>> = {
     logoutMessage: '会话已过期，正在返回 MYOPS 登录页…',
   },
   ta: {
+    transactionsGroup: 'பரிவர்த்தனைகள்',
+    accountingGroup: 'கணக்கியல்',
+    uploadGroup: 'பதிவேற்று மற்றும் மாற்று',
+    reportsGroup: 'அறிக்கைகள்',
+    settingsGroup: 'அமைப்புகள்',
+
     language: 'மொழி',
     languageSelector: 'மொழியைத் தேர்ந்தெடுக்கவும்',
     email: 'மின்னஞ்சல்',
@@ -346,7 +375,7 @@ export function getNavigationGroups(locale: Locale | string | null | undefined) 
   return [
     { title: t.overview, items: [{ href: '/dashboard', label: t.dashboard }] },
     {
-      title: 'Transactions',
+      title: t.transactionsGroup,
       items: [
         { href: '/transactions', label: t.allTransactions },
         { href: '/transactions/money-in', label: t.moneyIn },
@@ -356,14 +385,14 @@ export function getNavigationGroups(locale: Locale | string | null | undefined) 
       ],
     },
     {
-      title: 'Accounting',
+      title: t.accountingGroup,
       items: [
         { href: '/accounts/financial', label: t.financialAccounts },
         { href: '/accounts/chart', label: t.chartOfAccounts },
       ],
     },
     {
-      title: 'Upload & Convert',
+      title: t.uploadGroup,
       items: [
         { href: '/upload', label: t.bankStatement },
         { href: '/upload', label: t.invoiceBill },
@@ -372,7 +401,7 @@ export function getNavigationGroups(locale: Locale | string | null | undefined) 
       ],
     },
     {
-      title: 'Reports',
+      title: t.reportsGroup,
       items: [
         { href: '/reports/profit-loss', label: t.profitLoss },
         { href: '/reports/balance-sheet', label: t.balanceSheet },
@@ -382,7 +411,7 @@ export function getNavigationGroups(locale: Locale | string | null | undefined) 
       ],
     },
     {
-      title: 'Settings',
+      title: t.settingsGroup,
       items: [
         { href: '/settings/business', label: t.businessProfile },
         { href: '/accounts/financial', label: t.bankAccountSettings },
@@ -401,8 +430,7 @@ export function getMissingTranslationKeys(): string[] {
     }
   }
 
-  const allKeys = Object.keys(translations[DEFAULT_LOCALE]) as TranslationKey[];
-  return allKeys.filter((key) =>
+  return [...keys].filter((key) =>
     SUPPORTED_LOCALES.some((locale) => !Object.prototype.hasOwnProperty.call(translations[locale], key)),
   );
 }

@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 vi.mock('../lib/auth/navigation', () => ({ isPreviewAuthBypassEnabled: () => false }));
 vi.mock('../lib/supabase/client', () => ({ getSupabaseBrowserClient: () => ({ from: (table: string) => {
   const q = { select: () => q, eq: () => q, order: () => q,
+    range: async(from:number,to:number)=>{let result:any;q.then(value=>{result=value;});return {...result,data:result.data.slice(from,to+1)};},
     then: (done: (value: unknown) => unknown) => done({ error: null, data: table === 'accounts' ? [
       { id: 'assets', business_id: 'biz', code: '1000', name: 'Assets', account_type: 'ASSET', normal_balance: 'DEBIT', is_active: true },
       { id: 'cash', business_id: 'biz', code: '1100', name: 'UAT Cash', account_type: 'ASSET', normal_balance: 'DEBIT', is_active: true },
@@ -24,6 +25,8 @@ afterEach(cleanup);
 it.each(['statement', 'ledger'] as const)('shows posted rows and totals for the selected %s account without reusing another account\'s rows', async report => {
   render(<ReportsWorkflow businessId="biz" defaultReport={report} />);
   await screen.findByRole('option', { name: 'UAT Cash' });
+  fireEvent.change(screen.getByLabelText('Start date'),{target:{value:'2026-10-01'}});
+  fireEvent.change(screen.getByLabelText('End date'),{target:{value:'2026-10-31'}});
 
   fireEvent.change(screen.getByRole('combobox', { name: 'Account' }), { target: { value: 'cash' } });
   await waitFor(() => expect(screen.getByText('Closing Balance: RM7.00')).toBeTruthy());

@@ -1,5 +1,7 @@
 'use client';
 
+import {useFinanceLocale} from './use-finance-locale';
+
 import { useEffect, useState } from 'react';
 
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
@@ -10,6 +12,7 @@ type AccountingSettingsPageProps = {
 };
 
 export function AccountingSettingsPage({ businessId, businessContextError }: AccountingSettingsPageProps) {
+  const {t:w}=useFinanceLocale();
   const [form, setForm] = useState({
     baseCurrency: 'MYR',
     fiscalYearStart: '',
@@ -121,8 +124,8 @@ export function AccountingSettingsPage({ businessId, businessContextError }: Acc
     return (
       <main style={{ minHeight: '100vh', background: '#f8fafc', color: '#0f172a', fontFamily: 'Arial, sans-serif', padding: '1.5rem 1rem 2.5rem' }}>
         <div style={{ maxWidth: 980, margin: '0 auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem' }}>
-          <h1>Accounting settings</h1>
-          <p style={{ margin: 0, color: '#475569' }}>{businessContextError ?? 'No active business is available for this user.'}</p>
+          <h1>{w("Accounting settings")}</h1>
+          <p style={{ margin: 0, color: '#475569' }}>{businessContextError ?? w("No active business is available for this user.")}</p>
         </div>
       </main>
     );
@@ -133,8 +136,8 @@ export function AccountingSettingsPage({ businessId, businessContextError }: Acc
       <div style={{ maxWidth: 980, margin: '0 auto', display: 'grid', gap: '1.25rem' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
-            <p style={{ margin: 0, color: '#475569', letterSpacing: '0.08em', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>Settings</p>
-            <h1 style={{ margin: '0.35rem 0 0', fontSize: 'clamp(2rem, 4vw, 2.5rem)' }}>Accounting Settings</h1>
+            <p style={{ margin: 0, color: '#475569', letterSpacing: '0.08em', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>{w("Settings")}</p>
+            <h1 style={{ margin: '0.35rem 0 0', fontSize: 'clamp(2rem, 4vw, 2.5rem)' }}>{w("Accounting Settings")}</h1>
           </div>
         </header>
 
@@ -143,28 +146,28 @@ export function AccountingSettingsPage({ businessId, businessContextError }: Acc
         ) : null}
 
         {isLoading ? (
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem', color: '#475569' }}>Loading accounting settings…</div>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem', color: '#475569' }}>{w("Loading accounting settings…")}</div>
         ) : (
           <section style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem', display: 'grid', gap: '1rem' }}>
-            {error ? <div role="alert" style={{ background: '#fff1f2', border: '1px solid #fecdd3', color: '#9f1239', borderRadius: 10, padding: '0.75rem' }}>{error}</div> : null}
-            {success ? <div role="status" style={{ background: '#ecfdf5', border: '1px solid #bbf7d0', color: '#166534', borderRadius: 10, padding: '0.75rem' }}>{success}</div> : null}
+            {error ? <div role="alert" style={{ background: '#fff1f2', border: '1px solid #fecdd3', color: '#9f1239', borderRadius: 10, padding: '0.75rem' }}>{w(error)}</div> : null}
+            {success ? <div role="status" style={{ background: '#ecfdf5', border: '1px solid #bbf7d0', color: '#166534', borderRadius: 10, padding: '0.75rem' }}>{w(success)}</div> : null}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
               <label style={{ display: 'grid', gap: '0.35rem' }}>
-                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>Base currency</span>
+                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>{w("Base currency")}</span>
                 <input value={form.baseCurrency} onChange={(event) => setForm((current) => ({ ...current, baseCurrency: event.target.value.toUpperCase() }))} style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '0.7rem 0.8rem' }} />
               </label>
 
               <label style={{ display: 'grid', gap: '0.35rem' }}>
-                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>Fiscal year start</span>
+                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>{w("Fiscal year start")}</span>
                 <input type="date" value={form.fiscalYearStart} onChange={(event) => setForm((current) => ({ ...current, fiscalYearStart: event.target.value }))} style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '0.7rem 0.8rem' }} />
               </label>
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ color: '#475569', fontSize: 13 }}>Last updated: {updatedAt || '—'}</div>
+              <div style={{ color: '#475569', fontSize: 13 }}>{w("Last updated:")} {updatedAt || '—'}</div>
               <button type="button" onClick={() => void handleSave()} disabled={isSaving} style={{ background: '#0f172a', color: '#fff', border: 'none', borderRadius: 10, padding: '0.8rem 1.2rem', fontWeight: 700, cursor: 'pointer', opacity: isSaving ? 0.7 : 1 }}>
-                {isSaving ? 'Saving...' : 'Save'}
+                {isSaving ? w("Saving...") : 'Save'}
               </button>
             </div>
           </section>
