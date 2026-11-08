@@ -1,11 +1,14 @@
 'use client';
 
+import {useFinanceLocale} from './use-finance-locale';
+
 import { useRouter } from 'next/navigation';
 import React, { FormEvent, useState } from 'react';
 
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
 export function BusinessOnboarding() {
+  const {t:w}=useFinanceLocale();
   const router = useRouter();
   const [name, setName] = useState('');
   const [registrationNo, setRegistrationNo] = useState('');
@@ -51,30 +54,26 @@ export function BusinessOnboarding() {
   };
 
   return (
-    <form onSubmit={createBusiness} aria-label="Business setup" style={{ display: 'grid', gap: '0.9rem', maxWidth: 640, marginTop: '1.25rem' }}>
-      <label style={{ display: 'grid', gap: '0.35rem', fontWeight: 600 }}>
-        Business name <span aria-hidden="true" style={{ color: '#b91c1c' }}>*</span>
+    <form onSubmit={createBusiness} aria-label={w("Business setup")} style={{ display: 'grid', gap: '0.9rem', maxWidth: 640, marginTop: '1.25rem' }}>
+      <label style={{ display: 'grid', gap: '0.35rem', fontWeight: 600 }}> {w("Business name")} <span aria-hidden="true" style={{ color: '#b91c1c' }}>*</span>
         <input required maxLength={160} autoComplete="organization" value={name} onChange={(event) => setName(event.target.value)} placeholder="For example, Southern Dotcom Sdn. Bhd." style={inputStyle} />
       </label>
-      <label style={{ display: 'grid', gap: '0.35rem', fontWeight: 600 }}>
-        Registration number <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span>
+      <label style={{ display: 'grid', gap: '0.35rem', fontWeight: 600 }}> {w("Registration number")} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>{w("(optional)")}</span>
         <input maxLength={80} value={registrationNo} onChange={(event) => setRegistrationNo(event.target.value)} style={inputStyle} />
       </label>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.9rem' }}>
-        <label style={{ display: 'grid', gap: '0.35rem', fontWeight: 600 }}>
-          Business email <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span>
+        <label style={{ display: 'grid', gap: '0.35rem', fontWeight: 600 }}> {w("Business email")} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>{w("(optional)")}</span>
           <input type="email" maxLength={254} autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} style={inputStyle} />
         </label>
-        <label style={{ display: 'grid', gap: '0.35rem', fontWeight: 600 }}>
-          Phone <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span>
+        <label style={{ display: 'grid', gap: '0.35rem', fontWeight: 600 }}> {w("Phone")} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>{w("(optional)")}</span>
           <input type="tel" maxLength={40} autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} style={inputStyle} />
         </label>
       </div>
-      <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>Currency: Malaysian Ringgit (MYR). You can update your business profile later.</p>
-      {error ? <p role="alert" style={{ margin: 0, color: '#b91c1c' }}>{error}</p> : null}
+      <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>{w("Currency: Malaysian Ringgit (MYR). You can update your business profile later.")}</p>
+      {error ? <p role="alert" style={{ margin: 0, color: '#b91c1c' }}>{w(error)}</p> : null}
       <div>
         <button type="submit" disabled={saving} style={{ border: 0, borderRadius: 10, padding: '0.8rem 1rem', background: '#123b72', color: '#fff', fontWeight: 700, cursor: saving ? 'wait' : 'pointer' }}>
-          {saving ? 'Setting up…' : 'Create business workspace'}
+          {saving ? w("Setting up…") : w("Create business workspace")}
         </button>
       </div>
     </form>

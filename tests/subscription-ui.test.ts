@@ -6,13 +6,15 @@ import { SubscriptionSettings } from '../components/subscription-settings';
 import { SubscriptionService } from '../packages/subscriptions';
 
 describe('standalone accounting access', () => {
-  it('renders the compatibility notice instead of pricing and billing UI', () => {
+  it('directs subscription management to the central MYOPS account', () => {
     render(createElement(SubscriptionSettings));
 
-    expect(screen.getByText(/Standalone accounting access/i)).toBeTruthy();
+    expect(screen.getByText(/Subscription managed in MYOPS/i)).toBeTruthy();
     expect(screen.queryByText(/RM29\/month/i)).toBeNull();
     expect(screen.queryByText(/Payment provider/i)).toBeNull();
-    expect(screen.getByText(/billing data is retained only for compatibility/i)).toBeTruthy();
+    expect(screen.getByRole('link',{name:'Open MYOPS account'}).getAttribute('href')).toBe('https://www.myops.com.my/account');
+    expect(screen.queryByText(/RLS|standalone|compatibility/i)).toBeNull();
+    expect(screen.getByText(/Manage your plan, trial and payments/i)).toBeTruthy();
   });
 
   it('allows accounting access without a subscription while keeping tenant boundaries', () => {

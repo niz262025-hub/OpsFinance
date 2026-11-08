@@ -1,5 +1,7 @@
 'use client';
 
+import {useFinanceLocale} from './use-finance-locale';
+
 import { useCallback, useEffect, useState } from 'react';
 
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
@@ -10,6 +12,7 @@ export type BusinessProfileSettingsProps = {
 };
 
 export function BusinessProfileSettings({ businessId, businessContextError }: BusinessProfileSettingsProps) {
+  const {t:w}=useFinanceLocale();
   const [form, setForm] = useState({
     name: '',
     registrationNo: '',
@@ -142,10 +145,10 @@ export function BusinessProfileSettings({ businessId, businessContextError }: Bu
       <div style={{ maxWidth: 980, margin: '0 auto', display: 'grid', gap: '1.25rem' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
-            <p style={{ margin: 0, color: '#475569', letterSpacing: '0.08em', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>Settings</p>
-            <h1 style={{ margin: '0.35rem 0 0', fontSize: 'clamp(2rem, 4vw, 2.5rem)' }}>Business Profile</h1>
+            <p style={{ margin: 0, color: '#475569', letterSpacing: '0.08em', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>{w("Settings")}</p>
+            <h1 style={{ margin: '0.35rem 0 0', fontSize: 'clamp(2rem, 4vw, 2.5rem)' }}>{w("Business Profile")}</h1>
           </div>
-          <button type="button" onClick={() => void loadProfile()} style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: 10, padding: '0.7rem 1rem', cursor: 'pointer' }}>Reload profile</button>
+          <button type="button" onClick={() => void loadProfile()} style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: 10, padding: '0.7rem 1rem', cursor: 'pointer' }}>{w("Reload profile")}</button>
         </header>
 
         {businessContextError ? (
@@ -153,61 +156,60 @@ export function BusinessProfileSettings({ businessId, businessContextError }: Bu
         ) : null}
 
         {!businessId ? (
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem', color: '#475569' }}>No active business is available for this user.</div>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem', color: '#475569' }}>{w("No active business is available for this user.")}</div>
         ) : isLoading ? (
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem', color: '#475569' }}>Loading business profile…</div>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem', color: '#475569' }}>{w("Loading business profile…")}</div>
         ) : (
           <section style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.25rem', display: 'grid', gap: '1rem' }}>
             {error && (
-              <div role="alert" style={{ background: '#fff1f2', border: '1px solid #fecdd3', color: '#9f1239', borderRadius: 10, padding: '0.75rem' }}>{error}</div>
+              <div role="alert" style={{ background: '#fff1f2', border: '1px solid #fecdd3', color: '#9f1239', borderRadius: 10, padding: '0.75rem' }}>{w(error)}</div>
             )}
             {success && (
-              <div role="status" style={{ background: '#ecfdf5', border: '1px solid #bbf7d0', color: '#166534', borderRadius: 10, padding: '0.75rem' }}>{success}</div>
+              <div role="status" style={{ background: '#ecfdf5', border: '1px solid #bbf7d0', color: '#166534', borderRadius: 10, padding: '0.75rem' }}>{w(success)}</div>
             )}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
               <label style={{ display: 'grid', gap: '0.35rem' }}>
-                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>Business name</span>
+                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>{w("Business name")}</span>
                 <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '0.7rem 0.8rem' }} />
               </label>
 
               <label style={{ display: 'grid', gap: '0.35rem' }}>
-                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>Registration no.</span>
+                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>{w("Registration no.")}</span>
                 <input value={form.registrationNo} onChange={(event) => setForm((current) => ({ ...current, registrationNo: event.target.value }))} style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '0.7rem 0.8rem' }} />
               </label>
 
               <label style={{ display: 'grid', gap: '0.35rem' }}>
-                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>Base currency</span>
+                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>{w("Base currency")}</span>
                 <input value={form.baseCurrency} onChange={(event) => setForm((current) => ({ ...current, baseCurrency: event.target.value.toUpperCase() }))} style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '0.7rem 0.8rem' }} />
               </label>
 
               <label style={{ display: 'grid', gap: '0.35rem' }}>
-                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>Fiscal year start</span>
+                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>{w("Fiscal year start")}</span>
                 <input type="date" value={form.fiscalYearStart} onChange={(event) => setForm((current) => ({ ...current, fiscalYearStart: event.target.value }))} style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '0.7rem 0.8rem' }} />
               </label>
 
               <label style={{ display: 'grid', gap: '0.35rem', gridColumn: '1 / -1' }}>
-                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>Address</span>
+                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>{w("Address")}</span>
                 <textarea value={form.address} onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))} rows={4} style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '0.7rem 0.8rem', resize: 'vertical', minHeight: 80 }} />
               </label>
 
               <label style={{ display: 'grid', gap: '0.35rem' }}>
-                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>Phone</span>
+                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>{w("Phone")}</span>
                 <input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '0.7rem 0.8rem' }} />
               </label>
 
               <label style={{ display: 'grid', gap: '0.35rem' }}>
-                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>Business email</span>
+                <span style={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>{w("Business email")}</span>
                 <input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '0.7rem 0.8rem' }} />
               </label>
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ color: '#475569', fontSize: 13 }}>
-                Last updated: {updatedAt ? new Date(updatedAt).toLocaleString() : 'Not available'}
+              <div style={{ color: '#475569', fontSize: 13 }}> {w("Last updated:")} {updatedAt ? new Date(updatedAt).toLocaleString() : w("Not available")}
               </div>
               <button type="button" onClick={() => void handleSave()} disabled={isSaving} style={{ background: '#0f172a', color: '#fff', border: 'none', borderRadius: 10, padding: '0.8rem 1.2rem', fontWeight: 700, cursor: 'pointer', opacity: isSaving ? 0.7 : 1 }}>
-                {isSaving ? 'Saving...' : 'Save'}
+                {isSaving ? w("Saving...") : 'Save'}
               </button>
             </div>
           </section>

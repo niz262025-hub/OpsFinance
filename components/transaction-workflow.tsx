@@ -1,16 +1,12 @@
 'use client';
 
+import {useFinanceLocale} from './use-finance-locale';
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 type TransactionWorkflowProps = { businessId?: string; defaultType?: 'MONEY_IN' | 'MONEY_OUT' | 'TRANSFER' | 'JOURNAL' };
 
-const formatMoney = (value: string | number | undefined) => {
-  const numeric = Number(value ?? 0);
-  if (!Number.isFinite(numeric)) {
-    return 'RM0.00';
-  }
-  return `RM${numeric.toFixed(2)}`;
-};
+
 
 type TransactionFormState = {
   type: 'MONEY_IN' | 'MONEY_OUT' | 'TRANSFER' | 'JOURNAL';
@@ -23,6 +19,7 @@ type TransactionFormState = {
 };
 
 export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: TransactionWorkflowProps) {
+  const {t:w,formatMoney}=useFinanceLocale();
   const [transactions, setTransactions] = useState<Array<any>>([]);
   const [accounts, setAccounts] = useState<Array<any>>([]);
   const [financialAccounts, setFinancialAccounts] = useState<Array<any>>([]);
@@ -130,24 +127,24 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
   };
 
   if (!businessId) {
-    return <main className="opsfinance-workflow-panel" style={{ padding: '2rem' }}><div className="opsfinance-surface" style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem' }}>No active business available for transaction posting.</div></main>;
+    return <main className="opsfinance-workflow-panel" style={{ padding: '2rem' }}><div className="opsfinance-surface" style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem' }}>{w("No active business available for transaction posting.")}</div></main>;
   }
 
   return (
     <main className="opsfinance-workflow-panel" style={{ padding: '1.5rem 1rem 2rem' }}>
       <div className="opsfinance-workflow-inner" style={{ maxWidth: 1200 }}>
-        <div className="opsfinance-workflow-header"><p className="opsfinance-kicker">OpsFinance</p><h1>Transactions</h1></div>
+        <div className="opsfinance-workflow-header"><p className="opsfinance-kicker">OpsFinance</p><h1>{w("Transactions")}</h1></div>
         <div className="opsfinance-surface" style={{ padding: '0.75rem 1rem' }}>
-          <strong>All Transactions</strong>
+          <strong>{w("All Transactions")}</strong>
         </div>
 
         <section className="opsfinance-surface" style={{ padding: '1rem', display: 'grid', gap: '0.8rem' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
             {[
-              { value: 'MONEY_IN', label: 'Money In' },
-              { value: 'MONEY_OUT', label: 'Money Out' },
-              { value: 'TRANSFER', label: 'Transfer' },
-              { value: 'JOURNAL', label: 'Journal Entry' },
+              { value: 'MONEY_IN', label: w("Money In") },
+              { value: 'MONEY_OUT', label: w("Money Out") },
+              { value: 'TRANSFER', label: w("Transfer") },
+              { value: 'JOURNAL', label: w("Journal Entry") },
             ].map((option) => {
               const isActive = form.type === option.value;
               return (
@@ -172,33 +169,33 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
           </div>
 
           <div className="opsfinance-form-grid">
-            <label>Type<select value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as TransactionFormState['type'] }))}><option value="MONEY_IN">Money In</option><option value="MONEY_OUT">Money Out</option><option value="TRANSFER">Transfer</option><option value="JOURNAL">Journal</option></select></label>
-            <label>Date<input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} /></label>
-            <label>Amount<input inputMode="decimal" autoComplete="off" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} /></label>
+            <label>{w("Type")}<select value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as TransactionFormState['type'] }))}><option value="MONEY_IN">{w("Money In")}</option><option value="MONEY_OUT">{w("Money Out")}</option><option value="TRANSFER">{w("Transfer")}</option><option value="JOURNAL">{w("Journal")}</option></select></label>
+            <label>{w("Date")}<input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} /></label>
+            <label>{w("Amount")}<input inputMode="decimal" autoComplete="off" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} /></label>
           </div>
           <div className="opsfinance-form-grid">
-            <label>Financial account<select value={form.financial_account_id} onChange={(event) => setForm((current) => ({ ...current, financial_account_id: event.target.value }))}><option value="">Select a financial account</option>{financialAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
-            <label>Ledger account<select value={form.account_id} onChange={(event) => setForm((current) => ({ ...current, account_id: event.target.value }))}><option value="">Select a ledger account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+            <label>{w("Financial account")}<select value={form.financial_account_id} onChange={(event) => setForm((current) => ({ ...current, financial_account_id: event.target.value }))}><option value="">{w("Select a financial account")}</option>{financialAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+            <label>{w("Ledger account")}<select value={form.account_id} onChange={(event) => setForm((current) => ({ ...current, account_id: event.target.value }))}><option value="">{w("Select a ledger account")}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
           </div>
           <div className="opsfinance-form-grid">
-            <label>Description<input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} /></label>
-            <label>Reference<input value={form.reference_no} onChange={(event) => setForm((current) => ({ ...current, reference_no: event.target.value }))} /></label>
+            <label>{w("Description")}<input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} /></label>
+            <label>{w("Reference")}<input value={form.reference_no} onChange={(event) => setForm((current) => ({ ...current, reference_no: event.target.value }))} /></label>
           </div>
-          <button type="button" className="opsfinance-primary-button" disabled={loading || saving} onClick={handleCreate}>{saving ? 'Posting…' : 'Create posting'}</button>
+          <button type="button" className="opsfinance-primary-button" disabled={loading || saving} onClick={handleCreate}>{saving ? w("Posting…") : w("Create posting")}</button>
         </section>
 
-        {error ? <div role="alert" className="opsfinance-surface" style={{ background: '#fff1f2', border: '1px solid #fecdd3', padding: '1rem' }}>{error}</div> : null}
-        {success ? <div role="status" className="opsfinance-surface" style={{ padding: '1rem' }}>Transaction posted successfully.</div> : null}
+        {error ? <div role="alert" className="opsfinance-surface" style={{ background: '#fff1f2', border: '1px solid #fecdd3', padding: '1rem' }}>{w(error)}</div> : null}
+        {success ? <div role="status" className="opsfinance-surface" style={{ padding: '1rem' }}>{w("Transaction posted successfully.")}</div> : null}
 
-        <section className="opsfinance-surface" style={{ padding: '1rem', overflowX: 'auto' }} aria-label="Recent transactions">
-          {loading ? <div>Loading transactions…</div> : (
+        <section className="opsfinance-surface" style={{ padding: '1rem', overflowX: 'auto' }} aria-label={w("Recent transactions")}>
+          {loading ? <div>{w("Loading transactions…")}</div> : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Reference</th><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Type</th><th style={{ textAlign: 'right', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Amount</th><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>Date</th></tr>
+                <tr><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>{w("Reference")}</th><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>{w("Type")}</th><th style={{ textAlign: 'right', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>{w("Amount")}</th><th style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>{w("Date")}</th></tr>
               </thead>
               <tbody>
                 {transactions.map((transaction) => (
-                  <tr key={transaction.id}><td style={{ padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{transaction.reference_no ?? transaction.transaction_no}</td><td style={{ padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{transaction.transaction_type}</td><td style={{ textAlign: 'right', padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{formatMoney(transaction.amount)}</td><td style={{ padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{transaction.transaction_date}</td></tr>
+                  <tr key={transaction.id}><td style={{ padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{transaction.reference_no ?? transaction.transaction_no}</td><td style={{ padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{w(transaction.transaction_type)}</td><td style={{ textAlign: 'right', padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{formatMoney(transaction.amount)}</td><td style={{ padding: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>{transaction.transaction_date}</td></tr>
                 ))}
               </tbody>
             </table>
