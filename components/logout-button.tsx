@@ -1,11 +1,14 @@
 'use client';
 
+import {useFinanceLocale} from './use-finance-locale';
+
 import { useRouter } from 'next/navigation';
 
 import { clearSupabaseSessionStorage, navigateToLogin } from '../lib/auth/navigation';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
 export function LogoutButton() {
+  const {t:w}=useFinanceLocale();
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -37,8 +40,6 @@ export function LogoutButton() {
   };
 
   return (
-    <button type="button" onClick={handleLogout} style={{ marginTop: '0.75rem' }}>
-      Sign out
-    </button>
+    <button type="button" onClick={handleLogout} style={{ marginTop: '0.75rem' }}> {w("Sign out")} </button>
   );
 }

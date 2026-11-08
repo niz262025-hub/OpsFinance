@@ -1,10 +1,13 @@
 'use client';
 
+import {useFinanceLocale} from './use-finance-locale';
+
 import React, { useCallback, useEffect, useState } from 'react';
 
 type ChartOfAccountsWorkflowProps = { businessId?: string };
 
 export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowProps) {
+  const {t:w}=useFinanceLocale();
   const [accounts, setAccounts] = useState<Array<any>>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -82,43 +85,43 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
   };
 
   if (!businessId) {
-    return <main className="opsfinance-workflow-panel" style={{ padding: '2rem' }}><div className="opsfinance-surface" style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem' }}>No active business available for chart of accounts.</div></main>;
+    return <main className="opsfinance-workflow-panel" style={{ padding: '2rem' }}><div className="opsfinance-surface" style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem' }}>{w("No active business available for chart of accounts.")}</div></main>;
   }
 
   return (
     <main className="opsfinance-workflow-panel" style={{ padding: '1.5rem 1rem 2rem' }}>
       <div className="opsfinance-workflow-inner" style={{ maxWidth: 1200 }}>
-        <div className="opsfinance-workflow-header"><p className="opsfinance-kicker">OpsFinance</p><h1>Chart of Accounts</h1></div>
+        <div className="opsfinance-workflow-header"><p className="opsfinance-kicker">OpsFinance</p><h1>{w("Chart of Accounts")}</h1></div>
 
         <section className="opsfinance-surface" style={{ padding: '1rem', display: 'grid', gap: '0.8rem' }}>
           <div className="opsfinance-form-grid">
-            <label>Code<input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} /></label>
-            <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
-            <label>Type<select value={form.account_type} onChange={(event) => setForm((current) => ({ ...current, account_type: event.target.value, normal_balance: ['ASSET', 'COGS', 'EXPENSE'].includes(event.target.value) ? 'DEBIT' : 'CREDIT', parent_id: '' }))}><option value="ASSET">ASSET</option><option value="LIABILITY">LIABILITY</option><option value="EQUITY">EQUITY</option><option value="REVENUE">REVENUE</option><option value="COGS">COGS</option><option value="EXPENSE">EXPENSE</option></select></label>
-            <label>Normal Balance<select value={form.normal_balance} onChange={(event) => setForm((current) => ({ ...current, normal_balance: event.target.value }))}><option value="DEBIT">DEBIT</option><option value="CREDIT">CREDIT</option></select></label>
-            <label>Parent account<select value={form.parent_id} onChange={(event) => setForm((current) => ({ ...current, parent_id: event.target.value }))}><option value="">Top-level account</option>{accounts.filter((account) => account.account_type === form.account_type && account.id !== editingId).map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label>
+            <label>{w("Code")}<input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} /></label>
+            <label>{w("Name")}<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
+            <label>{w("Type")}<select value={form.account_type} onChange={(event) => setForm((current) => ({ ...current, account_type: event.target.value, normal_balance: ['ASSET', 'COGS', 'EXPENSE'].includes(event.target.value) ? 'DEBIT' : 'CREDIT', parent_id: '' }))}><option value="ASSET">{w("ASSET")}</option><option value="LIABILITY">{w("LIABILITY")}</option><option value="EQUITY">{w("EQUITY")}</option><option value="REVENUE">{w("REVENUE")}</option><option value="COGS">{w("COGS")}</option><option value="EXPENSE">{w("EXPENSE")}</option></select></label>
+            <label>{w("Normal Balance")}<select value={form.normal_balance} onChange={(event) => setForm((current) => ({ ...current, normal_balance: event.target.value }))}><option value="DEBIT">{w("DEBIT")}</option><option value="CREDIT">{w("CREDIT")}</option></select></label>
+            <label>{w("Parent account")}<select value={form.parent_id} onChange={(event) => setForm((current) => ({ ...current, parent_id: event.target.value }))}><option value="">{w("Top-level account")}</option>{accounts.filter((account) => account.account_type === form.account_type && account.id !== editingId).map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label>
           </div>
           <div className="opsfinance-action-row">
-            <button type="button" className="opsfinance-primary-button" disabled={saving || loading} onClick={handleCreate}>{saving ? 'Saving…' : editingId ? 'Save account' : 'Create account'}</button>
-            {editingId ? <button type="button" className="opsfinance-secondary-button" disabled={saving} onClick={() => { setEditingId(null); setForm({ code: '', name: '', account_type: 'ASSET', normal_balance: 'DEBIT', parent_id: '', is_active: true }); }}>Cancel</button> : null}
-            <label className="opsfinance-inline-label"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))} /> Active</label>
+            <button type="button" className="opsfinance-primary-button" disabled={saving || loading} onClick={handleCreate}>{saving ? w("Saving…") : editingId ? w("Save account") : w("Create account")}</button>
+            {editingId ? <button type="button" className="opsfinance-secondary-button" disabled={saving} onClick={() => { setEditingId(null); setForm({ code: '', name: '', account_type: 'ASSET', normal_balance: 'DEBIT', parent_id: '', is_active: true }); }}>{w("Cancel")}</button> : null}
+            <label className="opsfinance-inline-label"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))} /> {w("Active")}</label>
           </div>
         </section>
 
-        {error ? <div role="alert" className="opsfinance-surface" style={{ background: '#fff1f2', border: '1px solid #fecdd3', padding: '1rem' }}>{error}</div> : null}
+        {error ? <div role="alert" className="opsfinance-surface" style={{ background: '#fff1f2', border: '1px solid #fecdd3', padding: '1rem' }}>{w(error)}</div> : null}
 
-        <section className="opsfinance-surface" style={{ padding: '1rem' }}>
-          {loading ? <div>Loading chart data…</div> : (
+        <section className="opsfinance-surface" style={{ padding: '1rem', overflowX:'auto' }}>
+          {loading ? <div>{w("Loading chart data…")}</div> : (
             <table className="opsfinance-table">
               <thead>
                 <tr>
-                  <th>Code</th>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Parent</th>
-                  <th>Normal</th>
-                  <th>Status</th>
-                  <th>Action</th>
+                  <th>{w("Code")}</th>
+                  <th>{w("Name")}</th>
+                  <th>{w("Type")}</th>
+                  <th>{w("Parent")}</th>
+                  <th>{w("Normal")}</th>
+                  <th>{w("Status")}</th>
+                  <th>{w("Action")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -126,9 +129,9 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
                   <tr key={account.id}>
                     <td>{account.code}</td>
                     <td>{account.name}</td>
-                    <td>{account.account_type}</td>
+                    <td>{w(account.account_type)}</td>
                     <td>{accounts.find((parent) => parent.id === account.parent_id)?.name ?? '—'}</td>
-                    <td>{account.normal_balance}</td>
+                    <td>{w(account.normal_balance)}</td>
                     <td>{account.is_active ? 'ACTIVE' : 'INACTIVE'}</td>
                     <td>{account.is_system ? null : <button type="button" onClick={() => {
                       setEditingId(account.id);
@@ -141,7 +144,7 @@ export function ChartOfAccountsWorkflow({ businessId }: ChartOfAccountsWorkflowP
                         is_active: account.is_active,
                       });
                       setError(null);
-                    }}>Edit {account.name}</button>}</td>
+                    }}>{w("Edit")} {account.name}</button>}</td>
                   </tr>
                 ))}
               </tbody>
