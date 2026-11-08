@@ -25,11 +25,15 @@ it('surfaces the approved MYOPS bundle pricing for paid OpsFinance access', () =
    entitled: true,
    session_active: true,
    access_mode: 'paid',
-   bundle: { app: 'OpsFinance', plan: 'THREE_APPS', monthly_price: '39.90', currency: 'MYR' },
+   bundle: { app: 'OpsFinance', plan: 'ALL_APPS', monthly_price: '79.00', currency: 'MYR' },
  });
 
- expect(monthlyPrice).toBe('39.90');
+ expect(monthlyPrice).toBe('79.00');
  expect(currency).toBe('MYR');
  expect(app).toBe('OpsFinance');
- expect(plan).toBe('THREE_APPS');
+ expect(plan).toBe('ALL_APPS');
+});
+
+it('does not invent a local price when central metadata is absent',()=>{
+ expect(resolveMyopsBundlePrice(null)).toMatchObject({monthlyPrice:'',plan:'MANAGED_IN_MYOPS'});
 });

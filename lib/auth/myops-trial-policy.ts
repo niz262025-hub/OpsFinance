@@ -36,9 +36,9 @@ export function assertFinanceFeature(access:FinanceAccess,feature:FinanceTrialFe
 
 export function resolveMyopsBundlePrice(entitlement: MyopsBundleEntitlement | null | undefined): { monthlyPrice: string; currency: string; app: string; plan: string } {
  const bundle = entitlement?.bundle as Record<string, unknown> | undefined;
- const monthlyPrice = typeof bundle?.monthly_price === 'string' && bundle.monthly_price.trim() ? bundle.monthly_price : '19.90';
+ const monthlyPrice = typeof bundle?.monthly_price === 'string' && bundle.monthly_price.trim() ? bundle.monthly_price : '';
  const currency = typeof bundle?.currency === 'string' && bundle.currency.trim() ? bundle.currency : 'MYR';
  const app = typeof bundle?.app === 'string' && bundle.app.trim() ? bundle.app : 'OpsFinance';
- const plan = typeof bundle?.plan === 'string' && bundle.plan.trim() ? bundle.plan : 'SINGLE_APP';
+ const plan = typeof bundle?.plan === 'string' && bundle.plan.trim() ? bundle.plan : 'MANAGED_IN_MYOPS';
  return { monthlyPrice, currency, app, plan };
 }
