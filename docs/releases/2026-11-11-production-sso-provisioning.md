@@ -33,7 +33,7 @@ The RPC remains SECURITY INVOKER and service-role-only. Advisory locking preserv
 
 Test logs are saved with this candidate. Tests replay repository migrations in a local PostgreSQL emulator and verify cross-tenant reads/writes, broker enforcement, authenticated/anonymous RPC access and trigger compatibility. These are not a live Supabase or authenticated browser UAT substitute.
 
-Browser automation in this workspace could not start: the Playwright browser download was truncated, and installed system Chromium was denied `socket()` by the runtime. Public API tests ran, but browser cases are not PASS. No real-device Android/iOS readiness is claimed. External CI browser checks must pass before release.
+Browser automation in this workspace could not start: the Playwright browser download was truncated, and installed system Chromium was denied `socket()` by the runtime. Public API tests ran, but browser cases are not PASS. No real-device Android/iOS readiness is claimed. GitHub Actions run 43005430272 subsequently passed installation, unit tests, migration/isolation tests, typecheck, lint, build and the signed-out desktop browser suite. This is public-route coverage only; authenticated central SSO and mobile browser UAT remain outstanding.
 
 ## Rollback
 
