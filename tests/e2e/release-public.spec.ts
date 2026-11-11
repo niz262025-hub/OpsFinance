@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 test('signed-out visitors see login and cannot open financial data', async ({ page }) => {
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Login', exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.goto('/transactions');
   await expect(page).toHaveURL(/\/login(?:\?|$)/);
 });
