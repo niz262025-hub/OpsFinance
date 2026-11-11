@@ -19,7 +19,12 @@ async function mappedIdentity(userRef: string, configured = clients(), onboardin
   const { data: existing, error } = await admin.from('myops_identity_links')
     .select('supabase_user_id,business_id').eq('user_ref', userRef).eq('enabled',true).maybeSingle();
   let mapping=existing;
-  if(!error&&!mapping&&onboardingProfile!==undefined&&process.env.VERCEL_ENV==='preview'
+  // Production uses the same verified grant as staging. ssoConfig() has already
+  // enforced the production broker gate; this readiness flag is enabled only
+  // after the provisioning migration and its permissions have been verified.
+  const provisioningEnvironment=process.env.VERCEL_ENV==='preview'
+    ||process.env.VERCEL_ENV==='production';
+  if(!error&&!mapping&&onboardingProfile!==undefined&&provisioningEnvironment
     &&process.env.OPSFINANCE_MYOPS_PROVISIONING_READY==='true') {
     mapping=await provisionFinanceIdentity(admin,userRef,onboardingProfile);
   }
