@@ -1,0 +1,37 @@
+name: Staging QA Gates
+on:
+  push:
+    branches: [fix/staging-qa-gates-20261111]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: staging-qa-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Lint (npm run lint)
+        run: npm run lint
+      - name: Typecheck / Test (npm run typecheck)
+        run: npm run typecheck
+      - name: Tests / Build (npm test)
+        run: npm test
+      - name: Build (npm run build)
+        run: npm run build
