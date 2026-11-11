@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto';
 // @vitest-environment node
 import { afterEach,describe,expect,it,vi } from 'vitest';
 import { openSession,sealSession,ssoConfig,type AppSession } from '../lib/auth/myops-session';
@@ -23,12 +24,16 @@ describe('sealed MYOPS application session',()=>{
   expect(()=>sealSession({...session,accessToken:'x'.repeat(5000)},secret)).toThrow();
   expect(()=>sealSession(session,'short')).toThrow();
  });
- it('requires aligned flags, HTTPS canonical origins and refuses production cutover',()=>{
+ it('requires aligned flags, HTTPS origins and a verified production gate',()=>{
   vi.stubEnv('MYOPS_SSO_ENABLED','true');vi.stubEnv('NEXT_PUBLIC_MYOPS_SSO_ENABLED','true');
   vi.stubEnv('OPSFINANCE_ORIGIN','https://finance.example');vi.stubEnv('MYOPS_ORIGIN','https://portal.example');
-  vi.stubEnv('MYOPS_APP_PRIVATE_KEY','test-key');vi.stubEnv('MYOPS_APP_SESSION_SECRET',secret);vi.stubEnv('VERCEL_ENV','preview');
+  vi.stubEnv('MYOPS_APP_PRIVATE_KEY',generateKeyPairSync('ed25519').privateKey.export({type:'pkcs8',format:'pem'}).toString());vi.stubEnv('MYOPS_APP_SESSION_SECRET',secret);vi.stubEnv('VERCEL_ENV','preview');
   expect(ssoConfig().transport.appId).toBe('opsfinance');
-  vi.stubEnv('VERCEL_ENV','production');expect(()=>ssoConfig()).toThrow();
+  vi.stubEnv('VERCEL_ENV','production');expect(()=>ssoConfig()).toThrow('verified Data API broker gate');
+  vi.stubEnv('MYOPS_PRODUCTION_DATA_GATE_VERIFIED','true');
+  vi.stubEnv('MYOPS_DATA_BROKER_KEY','');expect(()=>ssoConfig()).toThrow('server Data API broker credential');
+  vi.stubEnv('MYOPS_DATA_BROKER_KEY','bad\nheader');expect(()=>ssoConfig()).toThrow('Invalid server broker configuration');
+  vi.stubEnv('MYOPS_DATA_BROKER_KEY','b'.repeat(48));expect(ssoConfig().transport.appId).toBe('opsfinance');
   vi.stubEnv('VERCEL_ENV','preview');vi.stubEnv('OPSFINANCE_ORIGIN','https://finance.example/path');expect(()=>ssoConfig()).toThrow();
  });
 });

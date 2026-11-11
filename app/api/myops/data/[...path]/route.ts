@@ -14,7 +14,15 @@ async function handler(request:NextRequest,context:{params:Promise<{path:string[
     if (!['GET','HEAD'].includes(request.method) && request.headers.get('origin')!==appOrigin) return NextResponse.json({error:'Request rejected.'},{status:403,headers:responseHeaders});
     const {path}=await context.params;
     if (path[0]!=='rest'||path[1]!=='v1'||!(path.length===3&&TABLES.has(path[2])||path.length===4&&path[2]==='rpc'&&RPCS.has(path[3]))) return NextResponse.json({error:'Unknown data operation.'},{status:404,headers:responseHeaders});
-    const {session}=await verifiedMyopsClient();
+    const {session,client,access}=await verifiedMyopsClient();
+    if(access?.mode==='trial' && !['GET','HEAD'].includes(request.method)) {
+      if(request.method==='POST' && path[2]==='rpc' && ['post_accounting_transaction_atomic','get_accounting_idempotency'].includes(path[3])) {
+        const payload=await request.json();
+        const result=await client.rpc(path[3],payload);
+        return NextResponse.json(result.error?{message:result.error.message}:result.data,{status:result.error?403:200,headers:responseHeaders});
+      }
+      return NextResponse.json({error:'This operation is preview only during your trial. Upgrade in MYOPS.'},{status:403,headers:responseHeaders});
+    }
     const url=process.env.SUPABASE_URL??process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key=process.env.SUPABASE_ANON_KEY??process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     if(!url||!key) throw new Error();

@@ -8,6 +8,8 @@
  * authorization boundary for accounting functionality.
  */
 export type PlanCode = 'STARTER';
+export type MyopsApp = 'OpsPS' | 'OpsFinance' | 'OpsFlow' | 'OpsHR';
+export type MyopsBundlePlan = 'FREE_TRIAL' | 'FOUNDERS_LIFETIME' | 'TWO_APPS' | 'ALL_APPS';
 export type SubscriptionLifecycleStatus = 'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'SUSPENDED' | 'CANCELLED';
 export type PaymentStatus = 'INITIATED' | 'PENDING' | 'AUTHORIZED' | 'PAID' | 'FAILED' | 'CANCELLED' | 'REFUNDED';
 export type AccessOperation = 'READ' | 'WRITE';
@@ -35,6 +37,22 @@ export type BillingFeature =
   | 'inventory'
   | 'advanced_tax'
   | 'advanced_approval';
+
+export interface MyopsBundleDefinition {
+  code: MyopsBundlePlan;
+  name: string;
+  monthlyPrice: string | null;
+  oneTimePrice?: string;
+  selectedApps?: number;
+  currency: string;
+  includedApps: MyopsApp[];
+  trialDays: number;
+  maxBusinesses: number;
+  maxUsers: number;
+  graceDays: number;
+  cancellationPolicy: 'PERIOD_END';
+  features: BillingFeature[];
+}
 
 export interface PlanDefinition {
   code: PlanCode;
@@ -112,6 +130,17 @@ export interface BillingConfiguration {
   livePaymentProvider: 'NOT_CONFIGURED';
 }
 
+// Display metadata only. Actual access comes from the signed central MYOPS grant.
+const MYOPS_APPS: MyopsApp[] = ['OpsFinance','OpsFlow','OpsPS','OpsHR'];
+const COMMON_BUNDLE = {currency:'MYR',trialDays:7,maxBusinesses:1,maxUsers:1,graceDays:7,cancellationPolicy:'PERIOD_END' as const,features:['dashboard','transactions','accounts','upload_and_convert','reports','reports_view','report_print','report_download','report_export','account_statement_view','account_statement_print','account_statement_download','account_statement_export','reconciliation','settings','accounting_rules'] as BillingFeature[]};
+export const MYOPS_BUNDLE_PLANS: Record<MyopsBundlePlan, MyopsBundleDefinition> = {
+ FREE_TRIAL: {...COMMON_BUNDLE,code:'FREE_TRIAL',name:'Free Trial',monthlyPrice:'0.00',includedApps:[...MYOPS_APPS]},
+ FOUNDERS_LIFETIME: {...COMMON_BUNDLE,code:'FOUNDERS_LIFETIME',name:'First 100 Subscribers',monthlyPrice:null,oneTimePrice:'29.00',includedApps:[...MYOPS_APPS]},
+ TWO_APPS: {...COMMON_BUNDLE,code:'TWO_APPS',name:'Normal Subscription',monthlyPrice:'49.00',selectedApps:2,includedApps:[...MYOPS_APPS]},
+ ALL_APPS: {...COMMON_BUNDLE,code:'ALL_APPS',name:'All Apps',monthlyPrice:'79.00',includedApps:[...MYOPS_APPS]},
+};
+
+// Retain the pre-bundle legacy standalone data model; it is not a MYOPS offer.
 export const STARTER_PLAN: PlanDefinition = {
   code: 'STARTER',
   name: 'Starter',
@@ -121,24 +150,7 @@ export const STARTER_PLAN: PlanDefinition = {
   maxUsers: 1,
   graceDays: 7,
   cancellationPolicy: 'PERIOD_END',
-  features: [
-    'dashboard',
-    'transactions',
-    'accounts',
-    'upload_and_convert',
-    'reports',
-    'reports_view',
-    'report_print',
-    'report_download',
-    'report_export',
-    'account_statement_view',
-    'account_statement_print',
-    'account_statement_download',
-    'account_statement_export',
-    'reconciliation',
-    'settings',
-    'accounting_rules',
-  ],
+  features: COMMON_BUNDLE.features,
 };
 
 export const DEFAULT_BILLING_CONFIGURATION: BillingConfiguration = {

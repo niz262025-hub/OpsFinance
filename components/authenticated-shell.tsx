@@ -5,9 +5,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 
+import { LanguageSwitcher } from './language-switcher';
 import { trackUserActivity } from '../lib/auth/user-activity';
 
 import { isPreviewAuthBypassEnabled } from '../lib/auth/navigation';
+import { getStoredLocale, getTranslation, getNavigationGroups, translations } from '../lib/i18n';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
 type AuthenticatedAppShellProps = {
@@ -23,60 +25,9 @@ type NavGroup = {
   items: NavItem[];
 };
 
-const navGroups: NavGroup[] = [
-  {
-    title: 'Overview',
-    items: [{ href: '/dashboard', label: 'Dashboard' }],
-  },
-  {
-    title: 'Transactions',
-    items: [
-      { href: '/transactions', label: 'All Transactions' },
-      { href: '/transactions/money-in', label: 'Money In' },
-      { href: '/transactions/money-out', label: 'Money Out' },
-      { href: '/transactions/transfer', label: 'Transfer' },
-      { href: '/transactions/journal', label: 'Journal Entry' },
-    ],
-  },
-  {
-    title: 'Accounting',
-    items: [
-      { href: '/accounts/financial', label: 'Financial Accounts' },
-      { href: '/accounts/chart', label: 'Chart of Accounts' },
-    ],
-  },
-  {
-    title: 'Upload & Convert',
-    items: [
-      { href: '/upload', label: 'Bank Statement' },
-      { href: '/upload', label: 'Invoice / Bill' },
-      { href: '/upload', label: 'Receipt' },
-      { href: '/reconciliation', label: 'Bank Reconciliation' },
-    ],
-  },
-  {
-    title: 'Reports',
-    items: [
-      { href: '/reports/profit-loss', label: 'Profit & Loss' },
-      { href: '/reports/balance-sheet', label: 'Balance Sheet' },
-      { href: '/reports/trial-balance', label: 'Trial Balance' },
-      { href: '/reports/general-ledger', label: 'General Ledger' },
-      { href: '/reports/account-statement', label: 'Account Statement' },
-    ],
-  },
-  {
-    title: 'Settings',
-    items: [
-      { href: '/settings/business', label: 'Business Profile' },
-      { href: '/accounts/financial', label: 'Bank Account Settings' },
-      { href: '/settings/accounting', label: 'Accounting Settings' },
-      { href: '/settings/accounting-rules', label: 'Accounting Rules' },
-    ],
-  },
-];
-
-function NavigationList({ onNavigate }: { onNavigate?: () => void }) {
+function NavigationList({ onNavigate, locale }: { onNavigate?: () => void; locale: string }) {
   const pathname = usePathname();
+  const navGroups = getNavigationGroups(locale);
 
   return (
     <nav aria-label="OpsFinance navigation" className="opsfinance-nav">
@@ -107,6 +58,14 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [idleExpired, setIdleExpired] = useState(false);
+  const [locale, setLocale] = useState<string>(getStoredLocale());
+  const t = translations[locale as keyof typeof translations] ?? translations.en;
+
+  useEffect(() => {
+    const nextLocale = getStoredLocale();
+    setLocale(nextLocale);
+    document.documentElement.lang = nextLocale;
+  }, [pathname]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth > 900) {
@@ -148,7 +107,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
     router.push(isPreviewAuthBypassEnabled() ? '/dashboard' : '/login');
   };
 
-  if (idleExpired) return <main role="status">Session expired. Returning to MYOPS login…</main>;
+  if (idleExpired) return <main role="status">{getTranslation(locale, 'logoutMessage')}</main>;
 
   return (
     <div className="opsfinance-app-shell">
@@ -160,17 +119,17 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
             </div>
             <div className="opsfinance-brand-copy">
               <strong>MYOPS</strong>
-              <span>{businessName ?? 'My account'}</span>
+              <span>{businessName ?? getTranslation(locale, 'myAccount')}</span>
             </div>
           </div>
         </div>
 
         <div className="opsfinance-business-card">
-          <label>Current business</label>
-          <strong>{businessName ?? 'No active business'}</strong>
+          <label>{getTranslation(locale, 'currentBusiness')}</label>
+          <strong>{businessName ?? getTranslation(locale, 'noActiveBusiness')}</strong>
         </div>
 
-        <NavigationList />
+        <NavigationList locale={locale} />
 
         {userEmail ? <div className="opsfinance-user-block">{userEmail}</div> : null}
 
@@ -185,20 +144,21 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
               onClick={() => setMobileOpen((value) => !value)}
               aria-expanded={mobileOpen}
               aria-controls="opsfinance-mobile-nav"
-              aria-label="Toggle navigation"
+              aria-label={getTranslation(locale, 'toggleNavigation')}
             >
               ☰
             </button>
             <div className="opsfinance-topbar-copy">
               <strong>MYOPS</strong>
-              <span>{businessName ?? 'My account'}</span>
+              <span>{businessName ?? getTranslation(locale, 'myAccount')}</span>
             </div>
           </div>
 
           <div className="opsfinance-topbar-meta">
-            <div className="opsfinance-business-pill">{businessName ?? 'No active business'}</div>
+            <LanguageSwitcher value={locale as any} onChange={(nextLocale) => setLocale(nextLocale)} />
+            <div className="opsfinance-business-pill">{businessName ?? getTranslation(locale, 'noActiveBusiness')}</div>
             <button type="button" onClick={signOut} className="opsfinance-signout">
-              Kembali ke MYOPS
+              {getTranslation(locale, 'backToMyOps')}
             </button>
           </div>
         </header>
@@ -206,10 +166,10 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
         {mobileOpen ? (
           <div id="opsfinance-mobile-nav" style={{ padding: '1rem 1rem 0' }}>
             <div className="opsfinance-business-card" style={{ marginBottom: '0.75rem' }}>
-              <label>Current business</label>
-              <strong>{businessName ?? 'No active business'}</strong>
+              <label>{getTranslation(locale, 'currentBusiness')}</label>
+              <strong>{businessName ?? getTranslation(locale, 'noActiveBusiness')}</strong>
             </div>
-            <NavigationList onNavigate={() => setMobileOpen(false)} />
+            <NavigationList locale={locale} onNavigate={() => setMobileOpen(false)} />
           </div>
         ) : null}
 

@@ -1,0 +1,81 @@
+=== tests ===
+ ✓ tests/myops-browser-client.test.ts (2 tests) 22ms
+ ✓ tests/financial-account-route.test.ts (1 test) 11ms
+ ✓ tests/myops-provisioning-database.test.ts (2 tests) 5490ms
+   ✓ atomically provisions an empty company, preserves retries, and denies disabled mappings and browser callers 3747ms
+   ✓ accepts the production auth-trigger profile but rejects existing tenant membership and unrelated profiles 1743ms
+ ✓ tests/trial-report-export.test.ts (3 tests) 15ms
+ ✓ tests/myops-provisioning.test.ts (3 tests) 12ms
+ ✓ tests/myops-trial-admission.test.ts (2 tests) 16ms
+ ✓ tests/upload-account-route.test.ts (2 tests) 11ms
+ ✓ tests/myops-idle-logout.test.ts (3 tests) 11ms
+ ✓ tests/myops-activity.test.ts (2 tests) 9ms
+ ✓ tests/trial-import-approval.test.ts (1 test) 4ms
+
+ Test Files  74 passed | 1 skipped (75)
+      Tests  342 passed | 1 skipped (343)
+   Start at  18:34:45
+   Duration  27.49s (transform 1.75s, setup 0ms, collect 4.51s, tests 14.16s, environment 20.31s, prepare 4.47s)
+
+
+=== db ===
+PASS replay 20261026175057_myops_data_api_broker_gate.sql
+PASS replay 20261026234552_finance_identity_read_grants.sql
+PASS replay 20261029020000_staging_account_management_privileges.sql
+PASS replay 20261029053508_staging_import_reconciliation_privileges.sql
+PASS replay 20261029070759_statement_account_identity_verification.sql
+PASS replay 20261102055242_finance_trial_atomic_quotas.sql
+PASS replay 20261102062556_finance_trial_atomic_statement_import.sql
+PASS replay 20261102065104_finance_myops_identity_provisioning.sql
+PASS replay 20261102073339_finance_trial_server_adapter_permissions.sql
+PASS replay 20261105065000_restrict_anon_security_definer_execute.sql
+PASS replay 20261105071500_restrict_new_auto_ledger_rpc_public_execute.sql
+PASS replay 20261111103346_finance_myops_provisioning_auth_trigger_compatibility.sql
+PASS: identity provisioning requires existing membership; browser roles cannot read mappings
+PASS: own-business access, cross-business read/write denial, anonymous RPC denial
+PASS: broker gate rejects absent/wrong/malformed credentials; valid broker preserves tenant isolation; rollback restores prior access
+PASS: cross-business journal account and financial-account references denied; original line preserved
+PASS: secure business bootstrap creates owner membership without billing or trial
+PASS: actual statement import adapter, two-file limit, retry and row-error rollback
+
+=== lint ===
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> opsfinance@0.1.0 lint
+> next lint
+
+`next lint` is deprecated and will be removed in Next.js 16.
+For new projects, use create-next-app to choose your preferred linter.
+For existing projects, migrate to the ESLint CLI:
+npx @next/codemod@canary next-lint-to-eslint-cli .
+
+✔ No ESLint warnings or errors
+
+=== typecheck ===
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> opsfinance@0.1.0 typecheck
+> tsc --noEmit
+
+
+=== build ===
+├ ƒ /settings/accounting-rules           2.53 kB         186 kB
+├ ƒ /settings/business                   3.83 kB         187 kB
+├ ○ /settings/subscription                 176 B         103 kB
+├ ƒ /transactions                          135 B         187 kB
+├ ƒ /transactions/journal                  135 B         187 kB
+├ ƒ /transactions/money-in                 135 B         187 kB
+├ ƒ /transactions/money-out                135 B         187 kB
+├ ƒ /transactions/transfer                 135 B         187 kB
+└ ƒ /upload                              4.54 kB         188 kB
++ First Load JS shared by all             103 kB
+  ├ chunks/1255-dc3ddf72a1dc71a7.js      46.6 kB
+  ├ chunks/4bd1b696-f785427dddbba9fb.js  54.2 kB
+  └ other shared chunks (total)          1.93 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+
+Browser UAT: BLOCKED. Browser package download truncated; system Chromium socket() denied. API-only cases passed; browser cases were not executed successfully. Authenticated staging UAT: NOT RUN; staging project access missing.

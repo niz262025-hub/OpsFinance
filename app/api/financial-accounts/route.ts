@@ -35,28 +35,6 @@ async function getFinancialAccountById(supabase: Awaited<ReturnType<typeof creat
   return data;
 }
 
-async function getOpeningEquityAccount(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, businessId: string) {
-  const { data, error } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('business_id', businessId)
-    .eq('is_system', true)
-    .eq('account_type', 'EQUITY')
-    .order('code', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message ?? 'Opening equity lookup failed.');
-  }
-
-  if (!data) {
-    throw new Error('No opening equity account is available for this business.');
-  }
-
-  return data;
-}
-
 function validateFinancialAccountPayload(payload: Record<string, unknown>, existing?: Record<string, unknown> | null) {
   const name = String(payload.name ?? existing?.name ?? '').trim();
   const accountCode = String(payload.accountCode ?? payload.account_code ?? existing?.account_code ?? '').trim();
@@ -87,6 +65,11 @@ function validateFinancialAccountPayload(payload: Record<string, unknown>, exist
   const accountNumber = rawNumber ? normalizeAccountNumber(rawNumber) : null;
   if (type === 'BANK' && (!bankName || !companyName || !accountNumber)) throw new Error('Bank name, company/account holder name and full account number are required.');
   if (bankName.length > 150 || companyName.length > 200) throw new Error('Bank or company name is too long.');
+  const parsedOpeningBalance = Number(openingBalance ?? 0);
+  if (!Number.isFinite(parsedOpeningBalance) || parsedOpeningBalance < 0) {
+    throw new Error('Opening balance must be a non-negative amount.');
+  }
+
   return {
     bankName, companyName, accountNumber,
     name,
@@ -94,61 +77,10 @@ function validateFinancialAccountPayload(payload: Record<string, unknown>, exist
     accountCode,
     currency,
     status,
-    openingBalance: Number(openingBalance ?? 0),
+    openingBalance: parsedOpeningBalance,
     openingBalanceDate: payload.openingBalanceDate ? String(payload.openingBalanceDate) : ((existing?.opening_balance_date as string | undefined) ?? null),
     accountId: payload.accountId ? String(payload.accountId).trim() || null : (payload.account_id ? String(payload.account_id).trim() || null : (existing?.account_id as string | null | undefined) ?? null),
   };
-}
-
-async function postOpeningBalanceJournal(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, businessId: string, accountId: string, amount: number, journalDate: string | null, createdBy: string) {
-  if (!Number.isFinite(amount) || amount === 0) {
-    return null;
-  }
-
-  const equityAccount = await getOpeningEquityAccount(supabase, businessId);
-  const normalizedDate = journalDate ?? new Date().toISOString().slice(0, 10);
-  const journalRef = `OB-${Date.now()}`;
-  const payload = {
-    p_business_id: businessId,
-    p_idempotency_key: `opening_balance:${accountId}:${journalRef}`,
-    p_transaction_type: 'MONEY_IN',
-    p_transaction_date: normalizedDate,
-    p_description: 'Opening balance',
-    p_reference_no: journalRef,
-    p_amount: Math.abs(amount),
-    p_financial_account_id: accountId,
-    p_account_id: equityAccount.id,
-    p_journal_no: journalRef,
-    p_journal_description: 'Opening balance',
-    p_lines: [
-      {
-        account_id: equityAccount.id,
-        credit: amount.toFixed(2),
-        description: 'Opening balance',
-      },
-      {
-        account_id: accountId,
-        debit: amount.toFixed(2),
-        description: 'Opening balance',
-      },
-    ],
-  };
-
-  const { data, error } = await supabase.rpc('post_accounting_transaction_atomic', payload);
-  if (error) {
-    throw new Error(error.message ?? 'Opening balance journal failed.');
-  }
-
-  await supabase.from('audit_logs').insert({
-    business_id: businessId,
-    user_id: createdBy,
-    action: 'ACCOUNTING_OPENING_BALANCE_POSTED',
-    entity_type: 'FINANCIAL_ACCOUNT',
-    entity_id: accountId,
-    metadata: { amount: Number(amount).toFixed(2), journal_ref: journalRef },
-  });
-
-  return data;
 }
 
 export async function GET(request: Request) {
@@ -209,65 +141,27 @@ export async function POST(request: Request) {
     const payload = await request.json().catch(() => ({}));
     const businessId = await getAuthorizedBusinessId(supabase, user.id, String(payload.businessId ?? '').trim() || null);
     const validation = validateFinancialAccountPayload(payload as Record<string, unknown>);
-
-    if (validation.accountId) {
-      const { data: accountRow, error: accountError } = await supabase
-        .from('accounts')
-        .select('id')
-        .eq('id', validation.accountId)
-        .eq('business_id', businessId)
-        .maybeSingle();
-
-      if (accountError) {
-        return NextResponse.json({ error: accountError.message }, { status: 400 });
-      }
-
-      if (!accountRow) {
-        return NextResponse.json({ error: 'Chart-of-accounts mapping is not valid for this business.' }, { status: 400 });
-      }
-    }
-
-    const { data: duplicateRow, error: duplicateError } = await supabase
-      .from('financial_accounts')
-      .select('id')
-      .eq('business_id', businessId)
-      .eq('account_code', validation.accountCode)
-      .maybeSingle();
-
-    if (duplicateError) {
-      return NextResponse.json({ error: duplicateError.message }, { status: 400 });
-    }
-
-    if (duplicateRow) {
-      return NextResponse.json({ error: `Financial account code ${validation.accountCode} already exists.` }, { status: 409 });
-    }
-
-    const { data, error } = await supabase
-      .from('financial_accounts')
-      .insert({
-        business_id: businessId,
-        bank_name: validation.bankName || null,
-        company_name: validation.companyName || null,
-        account_number: validation.accountNumber,
-        name: validation.name,
-        type: validation.type,
-        account_code: validation.accountCode,
-        currency: validation.currency,
-        opening_balance: validation.openingBalance,
-        opening_balance_date: validation.openingBalanceDate,
-        status: validation.status,
-        account_id: validation.accountId,
-      })
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc('create_financial_account_with_ledger', {
+      p_business_id: businessId,
+      p_name: validation.name,
+      p_type: validation.type,
+      p_account_code: validation.accountCode,
+      p_currency: validation.currency,
+      p_status: validation.status,
+      p_bank_name: validation.bankName || null,
+      p_company_name: validation.companyName || null,
+      p_account_number: validation.accountNumber,
+      p_opening_balance: validation.openingBalance,
+      p_opening_balance_date: validation.openingBalanceDate,
+      p_account_id: validation.accountId,
+    });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      const status = error.message?.includes('already exists') ? 409 : 400;
+      return NextResponse.json({ error: error.message }, { status });
     }
 
-    const openingJournal = await postOpeningBalanceJournal(supabase, businessId, data.id, validation.openingBalance, validation.openingBalanceDate ?? null, user.id);
-
-    return NextResponse.json({ financialAccount: data, openingJournal });
+    return NextResponse.json(data);
   } catch (caughtError) {
     const message = caughtError instanceof Error ? caughtError.message : 'Business access denied.';
     return NextResponse.json({ error: message }, { status: 400 });
@@ -301,10 +195,19 @@ export async function PUT(request: Request) {
 
     const validation = validateFinancialAccountPayload(payload as Record<string, unknown>, existing);
 
+    const openingBalanceWasProvided = payload.openingBalance !== undefined || payload.opening_balance !== undefined;
+    const openingDateWasProvided = payload.openingBalanceDate !== undefined || payload.opening_balance_date !== undefined;
+    if (
+      (openingBalanceWasProvided && validation.openingBalance !== Number(existing.opening_balance ?? 0))
+      || (openingDateWasProvided && validation.openingBalanceDate !== existing.opening_balance_date)
+    ) {
+      return NextResponse.json({ error: 'Opening balances can only be changed through a balanced journal entry.' }, { status: 400 });
+    }
+
     if (validation.accountId) {
       const { data: accountRow, error: accountError } = await supabase
         .from('accounts')
-        .select('id')
+        .select('id, account_type, is_active')
         .eq('id', validation.accountId)
         .eq('business_id', businessId)
         .maybeSingle();
@@ -313,8 +216,24 @@ export async function PUT(request: Request) {
         return NextResponse.json({ error: accountError.message }, { status: 400 });
       }
 
-      if (!accountRow) {
+      if (!accountRow || !accountRow.is_active || (validation.type === 'BANK' && accountRow.account_type !== 'ASSET')) {
         return NextResponse.json({ error: 'Chart-of-accounts mapping is not valid for this business.' }, { status: 400 });
+      }
+
+      const { data: linkedRow, error: linkedError } = await supabase
+        .from('financial_accounts')
+        .select('id')
+        .eq('business_id', businessId)
+        .eq('account_id', validation.accountId)
+        .eq('type', 'BANK')
+        .neq('id', targetId)
+        .maybeSingle();
+
+      if (linkedError) {
+        return NextResponse.json({ error: linkedError.message }, { status: 400 });
+      }
+      if (validation.type === 'BANK' && linkedRow) {
+        return NextResponse.json({ error: 'Bank ledger is already linked to another bank account.' }, { status: 409 });
       }
     }
 
@@ -345,8 +264,6 @@ export async function PUT(request: Request) {
         account_code: validation.accountCode,
         currency: validation.currency,
         status: validation.status,
-        opening_balance: validation.openingBalance,
-        opening_balance_date: validation.openingBalanceDate,
         account_id: validation.accountId,
       })
       .eq('id', targetId)

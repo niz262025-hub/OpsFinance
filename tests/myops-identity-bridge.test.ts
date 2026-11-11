@@ -1,10 +1,11 @@
 import {generateKeyPairSync} from 'node:crypto';
 // @vitest-environment node
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
-const mocks=vi.hoisted(()=>({create:vi.fn(),redeem:vi.fn(),check:vi.fn(),cookies:vi.fn()}));
+const mocks=vi.hoisted(()=>({create:vi.fn(),redeem:vi.fn(),check:vi.fn(),cookies:vi.fn(),provision:vi.fn()}));
 vi.mock('@supabase/supabase-js',()=>({createClient:mocks.create}));
 vi.mock('next/headers',()=>({cookies:mocks.cookies}));
 vi.mock('../lib/auth/myops-transport',()=>({redeemMyopsTicket:mocks.redeem,checkMyopsEntitlement:mocks.check}));
+vi.mock('../lib/auth/myops-provisioning',()=>({provisionFinanceIdentity:mocks.provision}));
 import {establishMyopsSession,verifiedMyopsClient} from '../lib/auth/myops-server';
 import {sealSession,type AppSession} from '../lib/auth/myops-session';
 const userId='c08f2182-2a66-4fc9-bbe6-02a21da4d750';
@@ -25,6 +26,25 @@ beforeEach(()=>{
 });
 afterEach(()=>{vi.unstubAllEnvs();vi.useRealTimers();});
 describe('MYOPS identity to RLS-user bridge',()=>{
+ it('provisions a missing production mapping only after central approval and explicit migration readiness',async()=>{
+  vi.stubEnv('VERCEL_ENV','production');
+  vi.stubEnv('MYOPS_PRODUCTION_DATA_GATE_VERIFIED','true');
+  vi.stubEnv('MYOPS_DATA_BROKER_KEY','b'.repeat(48));
+  const profile={display_name:'Owner',company_name:'Company'};
+  mocks.redeem.mockResolvedValue({session_id:sessionId,user_ref:'u'.repeat(43),product:'opsfinance',max_session_seconds:43200,onboarding_profile:profile});
+  mapping.maybeSingle.mockResolvedValue({data:null,error:null});
+  mocks.provision.mockResolvedValue({supabase_user_id:userId,business_id:businessId});
+  await expect(establishMyopsSession('t'.repeat(43))).rejects.toThrow('No authorized identity mapping.');
+  expect(mocks.provision).not.toHaveBeenCalled();
+  vi.stubEnv('OPSFINANCE_MYOPS_PROVISIONING_READY','true');
+  mocks.check.mockRejectedValueOnce(new Error('MYOPS access denied.'));
+  await expect(establishMyopsSession('t'.repeat(43))).rejects.toThrow('MYOPS access denied.');
+  expect(mocks.provision).not.toHaveBeenCalled();
+  const session=await establishMyopsSession('t'.repeat(43));
+  expect(mocks.provision).toHaveBeenCalledWith(admin,'u'.repeat(43),profile);
+  expect(session).toMatchObject({userId,businessId});
+  expect(member.eq).toHaveBeenCalledWith('business_id',businessId);
+ });
  it('starts only read-only access checks together but withholds the client until central approval',async()=>{
   const session:AppSession={version:1,sessionId,userRef:'u'.repeat(43),userId,businessId,accessToken:'user-jwt',expiresAt:Date.now()+60000};
   mocks.cookies.mockResolvedValue({get:()=>({value:sealSession(session,'k'.repeat(48))})});
@@ -65,6 +85,12 @@ describe('MYOPS identity to RLS-user bridge',()=>{
   await vi.advanceTimersByTimeAsync(180);
   expect(complete).toBe(true);
   await pending;
+ });
+ it('checks central access before looking up or provisioning a local identity',async()=>{
+  mocks.check.mockRejectedValue(new Error('MYOPS access denied.'));
+  await expect(establishMyopsSession('t'.repeat(43))).rejects.toThrow('MYOPS access denied');
+  expect(admin.from).not.toHaveBeenCalled();
+  expect(admin.auth.admin.generateLink).not.toHaveBeenCalled();
  });
  it('only mints a session for the preprovisioned, confirmed identity and membership',async()=>{
   const session=await establishMyopsSession('t'.repeat(43));

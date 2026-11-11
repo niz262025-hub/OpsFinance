@@ -35,11 +35,15 @@ describe('financial account ui', () => {
   it('renders the create account action and submits an account creation request', async () => {
     const fetchMock = vi.fn(async (url, init) => {
       if (String(url).startsWith('/api/accounts?')) return {ok:true,json:async()=>({accounts:[
-        {id:'ledger-1',code:'1000',name:'Main Cash Ledger',is_active:true},
-        {id:'inactive-ledger',code:'9999',name:'Inactive Ledger',is_active:false},
+        {id:'ledger-1',code:'1100',name:'Available Cash Ledger',account_type:'ASSET',is_active:true},
+        {id:'linked-ledger',code:'1110',name:'Linked Bank Ledger',account_type:'ASSET',is_active:true},
+        {id:'income-ledger',code:'4100',name:'Sales Revenue',account_type:'REVENUE',is_active:true},
+        {id:'inactive-ledger',code:'9999',name:'Inactive Ledger',account_type:'ASSET',is_active:false},
       ]})};
       if (init?.method === 'POST') return {ok:true,json:async()=>({financialAccount:{id:'fa-123',name:'Main Bank',account_code:'MAIN-BANK',type:'BANK',currency:'MYR',status:'ACTIVE'}})};
-      return {ok:true,json:async()=>({financialAccounts:[]})};
+      return {ok:true,json:async()=>({financialAccounts:[
+        {id:'existing-bank',type:'BANK',account_id:'linked-ledger'},
+      ]})};
     });
 
     vi.stubGlobal('fetch', fetchMock);
@@ -48,9 +52,9 @@ describe('financial account ui', () => {
 
     expect(await screen.findByRole('button', { name: /\+ Create Account/i })).toBeTruthy();
 
-    await screen.findByRole('option', {name:'1000 — Main Cash Ledger'});
+    await screen.findByRole('option', {name:'1100 — Available Cash Ledger'});
     expect(screen.queryByRole('option',{name:/Inactive Ledger/})).toBeNull();
-    fireEvent.change(screen.getByLabelText('COA mapping'), {target:{value:'ledger-1'}});
+    expect(screen.queryByRole('option',{name:/Linked Bank Ledger|Sales Revenue/})).toBeNull();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Main Bank' } });
     fireEvent.change(screen.getByLabelText('Bank name'), {target:{value:'Dummy Bank'}});
     fireEvent.change(screen.getByLabelText('Company / account holder name'), {target:{value:'UAT Company'}});
@@ -63,7 +67,7 @@ describe('financial account ui', () => {
     expect(post[0]).toBe('/api/financial-accounts');
     expect(JSON.parse(String(post[1]?.body))).toMatchObject({
       bankName:'Dummy Bank',companyName:'UAT Company',accountNumber:'001235',
-      accountId: 'ledger-1',
+      accountId: null,
       businessId: 'business-1',
       name: 'Main Bank',
       accountCode: 'MAIN-BANK',

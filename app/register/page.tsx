@@ -2,16 +2,24 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
+import { LanguageSwitcher } from '../../components/language-switcher';
 import { navigateToDashboard } from '../../lib/auth/navigation';
 import { normalizeAuthError } from '../../lib/auth/session';
+import { getStoredLocale, getTranslation, translations } from '../../lib/i18n';
 import { getSupabaseBrowserClient } from '../../lib/supabase/client';
 
 export default function RegisterPage() {
+  const locale = getStoredLocale();
+  const t = translations[locale];
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -21,13 +29,13 @@ export default function RegisterPage() {
     const name = String(formData.get('name') ?? '').trim();
 
     if (!email || !password || !name) {
-      setError('Please provide your name, email, and password.');
+      setError(getTranslation(locale, 'provideNameEmailPassword'));
       return;
     }
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setError('Supabase is not configured in this environment.');
+      setError(getTranslation(locale, 'supabaseNotConfigured'));
       return;
     }
 
@@ -54,17 +62,21 @@ export default function RegisterPage() {
     }
 
     if (data.session) {
-      setStatus('Account created successfully.');
+      setStatus(getTranslation(locale, 'accountCreated'));
       navigateToDashboard();
       return;
     }
 
-    setStatus('Account created. Please check your email to confirm your account before signing in.');
+    setStatus(getTranslation(locale, 'accountCreatedCheckEmail'));
   };
 
   return (
     <main className="tenant-auth-viewport">
       <div className="tenant-auth-shell">
+        <div className="tenant-auth-topbar">
+          <LanguageSwitcher />
+        </div>
+
         <section className="tenant-auth-visual">
           <div className="tenant-auth-brand">
             <div className="tenant-brand-mark">
@@ -139,8 +151,8 @@ export default function RegisterPage() {
 
           <div className="tenant-auth-copy">
             <div className="eyebrow">OpsFinance</div>
-            <h1>Build a clearer financial picture.</h1>
-            <p>Create your workspace and bring together accounting, cash flow, and operational reporting in a single view.</p>
+            <h1>{t.createYourWorkspace}</h1>
+            <p>{t.registerToStart}</p>
           </div>
 
           <Image src="/myops-logo-wordmark.png" alt="MYOPS logo" className="tenant-brand-logo" width={320} height={120} />
@@ -148,27 +160,27 @@ export default function RegisterPage() {
 
         <section className="tenant-auth-form-panel">
           <div className="tenant-auth-card">
-            <h2>Create account</h2>
-            <p>Register to start using OpsFinance.</p>
+            <h2>{t.registerHeading}</h2>
+            <p>{t.registerDescription}</p>
 
             <form onSubmit={handleSubmit} method="post" className="tenant-form">
               <div className="tenant-field">
-                <label htmlFor="name">Name</label>
+                <label htmlFor="name">{t.name}</label>
                 <input id="name" type="text" name="name" autoComplete="name" />
               </div>
 
               <div className="tenant-field">
-                <label htmlFor="email">Email</label>
+                <label htmlFor="email">{t.email}</label>
                 <input id="email" type="email" name="email" autoComplete="email" />
               </div>
 
               <div className="tenant-field">
-                <label htmlFor="password">Password</label>
+                <label htmlFor="password">{t.password}</label>
                 <input id="password" type="password" name="password" autoComplete="new-password" />
               </div>
 
               <button type="submit" className="brand-button" disabled={pending}>
-                {pending ? 'Creating account...' : 'Create account'}
+                {pending ? t.creatingAccount : t.createAccount}
               </button>
             </form>
 
@@ -176,7 +188,7 @@ export default function RegisterPage() {
             {error ? <p className="tenant-inline-message error">{error}</p> : null}
 
             <div className="tenant-auth-footer">
-              <span>Already have an account? <Link href="/login">Sign in</Link></span>
+              <span>{t.alreadyHaveAccount} <Link href="/login">{t.signIn}</Link></span>
             </div>
           </div>
         </section>

@@ -1,5 +1,6 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, createPrivateKey, randomBytes } from 'node:crypto';
 import type { MyopsTransportConfig } from './myops-transport';
+import { myopsBrokerHeaders } from './myops-broker';
 
 export const MYOPS_COOKIE = '__Host-opsfinance-sso';
 export interface AppSession {
@@ -16,7 +17,14 @@ export function ssoEnabled() { return process.env.MYOPS_SSO_ENABLED === 'true'; 
 export function ssoConfig(): { transport: MyopsTransportConfig; appOrigin: string; secret: string } {
   // Production cutover additionally needs a verified Data API broker gate so old local
   // Supabase credentials cannot circumvent central entitlement checks. Not enabled here.
-  if (!ssoEnabled() || process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED !== 'true' || process.env.VERCEL_ENV === 'production') throw new Error('SSO is not enabled for this deployment.');
+  if (!ssoEnabled() || process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED !== 'true') throw new Error('SSO is not enabled for this deployment.');
+  // Production stays fail-closed until the Data API broker gate is reviewed and explicitly enabled.
+  if (process.env.VERCEL_ENV === 'production' && process.env.MYOPS_PRODUCTION_DATA_GATE_VERIFIED !== 'true') {
+    throw new Error('Production SSO requires a verified Data API broker gate.');
+  }
+  if (process.env.VERCEL_ENV === 'production' && !myopsBrokerHeaders()['x-myops-broker-key']) {
+    throw new Error('Production SSO requires a server Data API broker credential.');
+  }
   const appOrigin = process.env.OPSFINANCE_ORIGIN ?? '';
   const origin = process.env.MYOPS_ORIGIN ?? '';
   for (const value of [appOrigin, origin]) {
@@ -25,6 +33,11 @@ export function ssoConfig(): { transport: MyopsTransportConfig; appOrigin: strin
   }
   const secret = process.env.MYOPS_APP_SESSION_SECRET ?? '';
   if (secret.length < 32 || !process.env.MYOPS_APP_PRIVATE_KEY) throw new Error('SSO configuration is incomplete.');
+  // Reject passwords or malformed material masquerading as an Ed25519 private key.
+  try {
+    const key = createPrivateKey(process.env.MYOPS_APP_PRIVATE_KEY);
+    if (key.asymmetricKeyType !== 'ed25519') throw new Error('invalid key type');
+  } catch { throw new Error('SSO Ed25519 private key is invalid.'); }
   return { appOrigin, secret, transport: { origin, appId: 'opsfinance', keyVersion: 'current', privateKey: process.env.MYOPS_APP_PRIVATE_KEY } };
 }
 export function sealSession(session: AppSession, secret: string): string {

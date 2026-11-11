@@ -40,3 +40,14 @@ This is approximately 44% faster in the controlled latency fixture. It is not a 
 Once a cloud-browser authenticated session is verifiable, compare the exact baseline and optimized preview builds on the same Finance staging alias. Use the same Chrome desktop/network, synthetic fixture and cache condition, record cold versus warm separately, and take at least five samples for dashboard usable content and Money In/Money Out navigation. Confirm RM85 cash, RM125 revenue, RM40 expenses and RM85 profit, plus denied direct entry/revoked session, trial limits and 15-minute inactivity. Do not promote before this evidence and owner release approval.
 
 Rollback the preview alias to baseline deployment dpl_7EMKTUrFx27TEcLshd5xCNh5LKVx if the optimized access flow fails. No data rollback or migration is required. Release candidate changes remain in draft PR 37.
+
+## Built candidates and final evidence
+
+| Candidate | Source | Deployment | State |
+| --- | --- | --- | --- |
+| Optimized isolated UAT | cdf52925fbe74c704713914d9ef2b24a149b7a50 | dpl_73S6aYS1bfLKeFxxCJiA3Ywy2qs8 — https://opsfinance-paomo1x2n-mohd-syaiful-nizam1.vercel.app | READY, preview |
+| Optimized PR implementation | 9a3c7a385b1d97a973397713c889afb26a097ae5 | dpl_8RV4bL61XwxM3EzJ6y9XNzoAHof8 — https://opsfinance-gqgckysj6-mohd-syaiful-nizam1.vercel.app | READY, preview |
+
+Final logs: [release suite, 322 PASS / 1 SKIP](./uat-evidence/access-release-full-2026-11-07.log), [staging suite, 308 PASS / 1 SKIP](./uat-evidence/access-staging-full-2026-11-07.log), [updated staging identity fixture, 10 PASS](./uat-evidence/access-staging-identity-2026-11-07.log). These counts describe different source bases and must not be added together.
+
+A browser request to the optimized staging /dashboard without a current session returned to central MYOPS /login, preserving direct-entry protection. Signed-in dashboard/route timing and real data reconciliation on the optimized candidate remain BLOCKED. No production release approval is requested.
