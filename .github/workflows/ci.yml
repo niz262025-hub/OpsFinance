@@ -11,6 +11,11 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      # Keep this version aligned with @playwright/test in package-lock.json.
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,5 +28,14 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
-      - run: npx playwright install --with-deps chromium webkit
-      - run: npx playwright test tests/e2e/release-public.spec.ts
+      - name: Verify preinstalled browser version
+        run: |
+          node -e 'const version = require("./node_modules/@playwright/test/package.json").version; if (version !== "1.64.1") throw new Error("Update the CI Playwright image to match " + version);'
+      - run: npx playwright test tests/e2e/release-public.spec.ts --workers=1 --global-timeout=600000
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: public-browser-test-results
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
