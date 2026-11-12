@@ -24,6 +24,14 @@ function selectAccounts() {
   fireEvent.change(screen.getByLabelText('Ledger account'), { target: { value: 'sales' } });
 }
 describe('transaction entry safety', () => {
+  it('refreshes financial accounts when returning from the account creation tab', async () => {
+    await openForm();
+    requests.mockResolvedValue(response({ ...accounts, financialAccounts: [...accounts.financialAccounts, { id: 'cash', name: 'UAT Cash' }] }));
+    fireEvent.focus(window);
+    await screen.findByRole('option', { name: 'UAT Cash' });
+    fireEvent.change(screen.getByLabelText('Financial account'), { target: { value: 'cash' } });
+    expect((screen.getByLabelText('Financial account') as HTMLSelectElement).value).toBe('cash');
+  });
   it('starts on the local current date without example amounts, references or account choices', async () => {
     await openForm();
     expect((screen.getByLabelText('Date') as HTMLInputElement).value).toBe('2026-11-07');
@@ -71,7 +79,11 @@ describe('transaction entry safety', () => {
     expect((screen.getByLabelText('Amount') as HTMLInputElement).value).toBe('12.50');
     await waitFor(() => expect((screen.getByRole('button', { name: 'Create posting' }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole('button', { name: 'Create posting' }));
-    expect(posts()).toHaveLength(2); finish(response({}));
+    expect(posts()).toHaveLength(2);
+    const firstKey = JSON.parse(posts()[0][1]!.body as string).idempotency_key;
+    expect(firstKey).toBeTruthy();
+    expect(JSON.parse(posts()[1][1]!.body as string).idempotency_key).toBe(firstKey);
+    finish(response({}));
     await screen.findByRole('status');
     expect((screen.getByLabelText('Amount') as HTMLInputElement).value).toBe('');
     expect((screen.getByLabelText('Description') as HTMLInputElement).value).toBe('');

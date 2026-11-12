@@ -31,6 +31,7 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const posting = useRef(false);
+  const pendingRequest = useRef<{ fingerprint: string; key: string } | null>(null);
   const [form, setForm] = useState<TransactionFormState>({
     type: defaultType,
     date: '',
@@ -62,6 +63,7 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
       setAccounts(payload.accounts ?? []);
       setFinancialAccounts(payload.financialAccounts ?? []);
       setTransactions(payload.transactions ?? []);
+      setError(null);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Could not load transaction data.');
     } finally {
@@ -71,6 +73,9 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
 
   useEffect(() => {
     loadData();
+    const refresh = () => { if (!posting.current) void loadData(); };
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
   }, [loadData]);
 
   const handleCreate = async () => {
@@ -96,12 +101,19 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
 
     posting.current = true;
     setSaving(true);
+    // Keep the same key after an uncertain network result so retrying cannot
+    // post the same entry twice. Changed input represents a new operation.
+    const fingerprint = JSON.stringify({ businessId, ...form });
+    if (pendingRequest.current?.fingerprint !== fingerprint) {
+      pendingRequest.current = { fingerprint, key: crypto.randomUUID() };
+    }
     try {
       const response = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           businessId,
+          idempotency_key: pendingRequest.current.key,
           type: form.type,
           date: form.date,
           description: form.description.trim(),
@@ -118,6 +130,7 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
       }
 
       setError(null);
+      pendingRequest.current = null;
       setForm(current => ({ ...current, amount: '', description: '', reference_no: '' }));
       setSuccess(true);
       await loadData();
