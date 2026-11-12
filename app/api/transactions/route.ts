@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { validateJournalLines } from '@/lib/accounting/journal-input';
 
 import { resolveAuthorizedBusinessId, resolveBusinessContextForUser } from '@/lib/auth/business';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -72,7 +73,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: membershipError.message }, { status: 400 });
   }
 
-  const businessId = resolveAuthorizedBusinessId(user.id, membershipRows ?? [], requestedBusinessId);
+  let businessId: string;
+  try {
+    businessId = resolveAuthorizedBusinessId(user.id, membershipRows ?? [], requestedBusinessId);
+  } catch {
+    return NextResponse.json({ error: 'Business access denied.' }, { status: 403 });
+  }
+
+  if (String(payload.type ?? payload.p_transaction_type).toUpperCase() === 'JOURNAL') {
+    try {
+      const journal = validateJournalLines(payload.lines ?? payload.p_lines);
+      const date = String(payload.date ?? payload.p_transaction_date ?? '');
+      const description = String(payload.description ?? payload.p_description ?? '').trim();
+      const key = String(payload.idempotency_key ?? payload.p_idempotency_key ?? '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) throw new Error('Choose a valid journal date.');
+      if (!description || !key) throw new Error('Journal description and idempotency key are required.');
+      const ids = [...new Set(journal.lines.map(line => line.account_id))];
+      const { data: accounts, error } = await supabase.from('accounts').select('id').eq('business_id', businessId).eq('is_active', true).in('id', ids);
+      if (error || accounts?.length !== ids.length) throw new Error('Journal accounts must be active and belong to this business.');
+      const { data, error: postingError } = await supabase.rpc('post_accounting_transaction_atomic', {
+        p_business_id: businessId, p_idempotency_key: key, p_transaction_type: 'JOURNAL',
+        p_transaction_date: date, p_description: description,
+        p_reference_no: String(payload.reference_no ?? '').trim() || null,
+        p_amount: journal.amount, p_financial_account_id: null, p_account_id: null,
+        p_journal_no: `JRN-${key}`, p_journal_description: description,
+        p_lines: journal.lines.map(line => ({ ...line, description })),
+      });
+      if (postingError) throw new Error(postingError.message);
+      return NextResponse.json({ transaction: data });
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Journal could not be posted.' }, { status: 400 });
+    }
+  }
 
   const accountId = String(payload.account_id ?? payload.p_account_id ?? '').trim();
   const financialAccountId = String(payload.financial_account_id ?? payload.p_financial_account_id ?? '').trim();

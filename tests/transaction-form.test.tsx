@@ -90,3 +90,24 @@ describe('transaction entry safety', () => {
     expect((screen.getByLabelText('Reference') as HTMLInputElement).value).toBe('');
   });
 });
+
+describe('general journal form', () => {
+ it('shows debit/credit lines, rejects imbalance, then sends explicit lines without a financial account', async () => {
+  render(<TransactionWorkflow businessId="biz" defaultType="JOURNAL" />);
+  await screen.findAllByRole('option', { name: /Sales/ });
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Create posting' }) as HTMLButtonElement).disabled).toBe(false));
+  expect(screen.queryByLabelText('Financial account')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Account 1'), { target: { value: 'sales' } });
+  fireEvent.change(screen.getByLabelText('Account 2'), { target: { value: 'sales' } });
+  fireEvent.change(screen.getByLabelText('Debit 1'), { target: { value: '25' } });
+  fireEvent.change(screen.getByLabelText('Credit 2'), { target: { value: '24' } });
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Controlled journal' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create posting' }));
+  expect(screen.getByRole('alert').textContent).toContain('unbalanced');
+  expect(posts()).toHaveLength(0);
+  fireEvent.change(screen.getByLabelText('Credit 2'), { target: { value: '25' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create posting' }));
+  await screen.findByRole('status');
+  expect(JSON.parse(posts()[0][1]!.body as string)).toMatchObject({ type: 'JOURNAL', lines: [{ debit: '25' }, { credit: '25' }] });
+ });
+});

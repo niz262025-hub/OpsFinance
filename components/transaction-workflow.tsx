@@ -1,5 +1,6 @@
 'use client';
 
+import { validateJournalLines, type JournalInputLine } from '../lib/accounting/journal-input';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 type TransactionWorkflowProps = { businessId?: string; defaultType?: 'MONEY_IN' | 'MONEY_OUT' | 'TRANSFER' | 'JOURNAL' };
@@ -30,6 +31,7 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [journalLines, setJournalLines] = useState<JournalInputLine[]>([{ account_id: '', debit: '', credit: '' }, { account_id: '', debit: '', credit: '' }]);
   const posting = useRef(false);
   const pendingRequest = useRef<{ fingerprint: string; key: string } | null>(null);
   const [form, setForm] = useState<TransactionFormState>({
@@ -81,7 +83,7 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
   const handleCreate = async () => {
     if (posting.current || loading) return;
     setSuccess(false);
-    if (!businessId || !form.financial_account_id || !form.account_id) {
+    if (!businessId || (form.type !== 'JOURNAL' && (!form.financial_account_id || !form.account_id))) {
       setError('Select a financial account and general ledger account before posting.');
       return;
     }
@@ -90,7 +92,7 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
       setError('Choose a transaction date before posting.');
       return;
     }
-    if (!/^\d+(?:\.\d{1,2})?$/.test(form.amount.trim()) || !Number.isFinite(Number(form.amount)) || Number(form.amount) <= 0) {
+    if (form.type !== 'JOURNAL' && (!/^\d+(?:\.\d{1,2})?$/.test(form.amount.trim()) || !Number.isFinite(Number(form.amount)) || Number(form.amount) <= 0)) {
       setError('Enter an amount greater than RM0 with no more than two decimal places.');
       return;
     }
@@ -99,11 +101,15 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
       return;
     }
 
+    if (form.type === 'JOURNAL') {
+      try { validateJournalLines(journalLines); }
+      catch (error) { setError(error instanceof Error ? error.message : 'Invalid journal.'); return; }
+    }
     posting.current = true;
     setSaving(true);
     // Keep the same key after an uncertain network result so retrying cannot
     // post the same entry twice. Changed input represents a new operation.
-    const fingerprint = JSON.stringify({ businessId, ...form });
+    const fingerprint = JSON.stringify({ businessId, ...form, journalLines });
     if (pendingRequest.current?.fingerprint !== fingerprint) {
       pendingRequest.current = { fingerprint, key: crypto.randomUUID() };
     }
@@ -114,6 +120,7 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
         body: JSON.stringify({
           businessId,
           idempotency_key: pendingRequest.current.key,
+          ...(form.type === 'JOURNAL' ? { lines: journalLines } : {}),
           type: form.type,
           date: form.date,
           description: form.description.trim(),
@@ -131,6 +138,7 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
 
       setError(null);
       pendingRequest.current = null;
+      setJournalLines([{ account_id: '', debit: '', credit: '' }, { account_id: '', debit: '', credit: '' }]);
       setForm(current => ({ ...current, amount: '', description: '', reference_no: '' }));
       setSuccess(true);
       await loadData();
@@ -187,12 +195,21 @@ export function TransactionWorkflow({ businessId, defaultType = 'MONEY_IN' }: Tr
           <div className="opsfinance-form-grid">
             <label>Type<select value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as TransactionFormState['type'] }))}><option value="MONEY_IN">Money In</option><option value="MONEY_OUT">Money Out</option><option value="TRANSFER">Transfer</option><option value="JOURNAL">Journal</option></select></label>
             <label>Date<input type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} /></label>
-            <label>Amount<input inputMode="decimal" autoComplete="off" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} /></label>
+            {form.type !== 'JOURNAL' ? <label>Amount<input inputMode="decimal" autoComplete="off" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} /></label> : null}
           </div>
-          <div className="opsfinance-form-grid">
+          {form.type !== 'JOURNAL' ? <div className="opsfinance-form-grid">
             <label>Financial account<select value={form.financial_account_id} onChange={(event) => setForm((current) => ({ ...current, financial_account_id: event.target.value }))}><option value="">Select a financial account</option>{financialAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
             <label>Ledger account<select value={form.account_id} onChange={(event) => setForm((current) => ({ ...current, account_id: event.target.value }))}><option value="">Select a ledger account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
-          </div>
+          </div> : <section aria-label="Journal lines">
+            <p>Enter debit and credit lines. Total debit must equal total credit.</p>
+            {journalLines.map((line, index) => <div className="opsfinance-form-grid" key={index}>
+              <label>Account {index + 1}<select value={line.account_id} onChange={event => setJournalLines(current => current.map((item, i) => i === index ? { ...item, account_id: event.target.value } : item))}><option value="">Select a ledger account</option>{accounts.filter(account => account.is_active !== false).map(account => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label>
+              <label>Debit {index + 1}<input inputMode="decimal" value={line.debit} onChange={event => setJournalLines(current => current.map((item, i) => i === index ? { ...item, debit: event.target.value } : item))} /></label>
+              <label>Credit {index + 1}<input inputMode="decimal" value={line.credit} onChange={event => setJournalLines(current => current.map((item, i) => i === index ? { ...item, credit: event.target.value } : item))} /></label>
+              {journalLines.length > 2 ? <button type="button" onClick={() => setJournalLines(current => current.filter((_, i) => i !== index))}>Remove line {index + 1}</button> : null}
+            </div>)}
+            <button type="button" disabled={journalLines.length >= 100} onClick={() => setJournalLines(current => [...current, { account_id: '', debit: '', credit: '' }])}>Add journal line</button>
+          </section>}
           <div className="opsfinance-form-grid">
             <label>Description<input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} /></label>
             <label>Reference<input value={form.reference_no} onChange={(event) => setForm((current) => ({ ...current, reference_no: event.target.value }))} /></label>

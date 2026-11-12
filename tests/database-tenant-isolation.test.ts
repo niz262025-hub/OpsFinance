@@ -96,6 +96,21 @@ beforeAll(async () => {
 afterAll(async () => { await db?.close(); });
 
 describe.sequential('PostgreSQL migration replay and tenant A/B boundaries', () => {
+  it('posts a balanced general journal without a financial account, audits it and deduplicates retries', async () => {
+    await asUser(userA);
+    await db.exec('begin');
+    try {
+      const equity = await scalar("select id as value from accounts where business_id=$1 and code='3100'", [businessA]);
+      const lines = JSON.stringify([{ account_id: accountA, debit: '75.25' }, { account_id: equity, credit: '75.25' }]);
+      const submit = () => scalar(`select public.post_accounting_transaction_atomic($1,'general-uat','JOURNAL','2026-11-12','General UAT','GENERAL-UAT',75.25,null,null,'GENERAL-UAT','General UAT',$2::jsonb) as value`, [businessA, lines]);
+      await submit();
+      const retry = await submit();
+      expect(retry.idempotent).toBe(true);
+      expect(await scalar("select count(*)::int as value from transactions where business_id=$1 and reference_no='GENERAL-UAT'", [businessA])).toBe(1);
+      expect(await scalar("select sum(jl.debit)=75.25 and sum(jl.credit)=75.25 as value from journal_lines jl join journal_entries je on je.id=jl.journal_entry_id where je.business_id=$1 and je.journal_no='GENERAL-UAT' and je.status='POSTED'", [businessA])).toBe(true);
+      expect(await scalar("select count(*)::int as value from audit_logs where business_id=$1 and metadata->>'idempotency_key'='general-uat'", [businessA])).toBe(1);
+    } finally { await db.exec('rollback'); }
+  });
   it('can reapply migration 019 without duplicates and roll back all migration effects transactionally', async () => {
     await db.exec('reset role');
     const accountCount = await scalar('select count(*)::int as value from public.accounts where business_id=$1', [businessA]);
