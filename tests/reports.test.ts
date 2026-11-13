@@ -192,6 +192,20 @@ describe('Phase 6 financial reporting', () => {
     expect(pnl.netProfit).toBe('3690.00');
   });
 
+  it('carries earlier profit into a later balance sheet without changing period P&L', () => {
+    const reports = new FinancialReportService(buildEngine());
+    const full = reports.getBalanceSheet({ businessId, dateTo: '2026-09-30' });
+    const later = reports.getBalanceSheet({ businessId, dateFrom: '2026-09-30', dateTo: '2026-09-30' });
+    expect(reports.getProfitAndLoss({ businessId, dateFrom: '2026-09-30', dateTo: '2026-09-30' }).netProfit).toBe('0.00');
+    expect(later.totalAssets).toBe(full.totalAssets);
+    expect(later.totalEquity).toBe(full.totalEquity);
+    expect(later.balanceDifference).toBe('0.00');
+    expect(later.isBalanced).toBe(true);
+    const beforeSales = reports.getBalanceSheet({ businessId, dateFrom: '2026-09-01', dateTo: '2026-09-10' });
+    expect(beforeSales.totalAssets).toBe('10000.00');
+    expect(beforeSales.totalEquity).toBe('10000.00');
+  });
+
   it('enforces the accounting equation in the balance sheet', () => {
     const engine = buildEngine();
     const reports = new FinancialReportService(engine);

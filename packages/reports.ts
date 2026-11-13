@@ -540,7 +540,10 @@ export class FinancialReportService {
       }
     }
 
-    const pnl = this.getProfitAndLoss(input);
+    // A balance sheet is cumulative as of dateTo. Asset/liability/equity
+    // balances already include opening activity, so accumulated income must
+    // include earlier periods too, independently of the P&L range selector.
+    const pnl = this.getProfitAndLoss({ businessId: input.businessId, dateTo: input.dateTo });
     totalEquity = totalEquity.add(new DecimalMoney(pnl.netProfit));
     const balanceDifference = totalAssets.subtract(totalLiabilities.add(totalEquity));
 
