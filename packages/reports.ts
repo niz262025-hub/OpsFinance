@@ -526,6 +526,13 @@ export class FinancialReportService {
         }
       }
 
+      // Statement balances use each account's own normal side. Financial
+      // position totals use the category's side, so contra accounts reduce it.
+      if ((account.accountType === 'ASSET' && account.normalBalance === 'CREDIT')
+        || (['LIABILITY', 'EQUITY'].includes(account.accountType) && account.normalBalance === 'DEBIT')) {
+        closing = DecimalMoney.zero().subtract(closing);
+      }
+
       if (account.accountType === 'ASSET') {
         assets.push({ accountId: account.id, accountName: account.name, amount: closing.toString() });
         totalAssets = totalAssets.add(closing);

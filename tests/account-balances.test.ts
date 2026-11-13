@@ -24,6 +24,16 @@ function fixture() {
   return { journals, repository, service };
 }
 describe('single-pass account balance summaries', () => {
+  it('subtracts a credit-normal contra asset from balance sheet assets', () => {
+    const { service } = fixture();
+    const sheet = service.getBalanceSheet({ businessId, dateFrom: '2026-11-07', dateTo: '2026-11-07' });
+    expect(sheet.assets.find(row => row.accountId === 'contra')?.amount).toBe('-0.11');
+    expect(sheet.totalAssets).toBe('1128.25');
+    expect(sheet.totalLiabilities).toBe('50.55');
+    expect(sheet.totalEquity).toBe('1077.70');
+    expect(sheet.isBalanced).toBe(true);
+  });
+
   it('matches every original statement closing balance including opening entries, refunds and credit-normal assets', () => {
     const { service, repository } = fixture();
     const result = service.getAccountBalances({ businessId });
