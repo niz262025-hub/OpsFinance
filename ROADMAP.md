@@ -40,9 +40,13 @@ of truth in [ACCOUNTING_ENGINE.md](ACCOUNTING_ENGINE.md).
    creating a second ledger or altering posted accounting balances. Bank and
    statement evidence are compared against the authoritative POSTED accounting
    ledger and report path.
-7. **Phase 7: Accounting Rules** - next planned phase; not started. Implement
-   configurable, testable rule evaluation.
-8. **Phase 8: Subscription + Starter entitlement** - implement plan lifecycle,
+7. **Phase 7: Accounting Rules** - complete. This phase includes configurable,
+   testable rule evaluation, business-scoped persistence, deterministic priority
+   ordering, same-business account validation, upload suggestion integration, and
+   database-layer protections that keep `auto_post` disabled. The rule service
+   remains suggestion-only and never bypasses the authoritative accounting engine.
+8. **Phase 8: Subscription + Starter entitlement** - next planned phase; not started.
+   Implement plan lifecycle,
    server-side limits, payment separation, and retained data on suspension.
 9. **Phase 9: Web UI** - implement the locked navigation and workflows in Next.js.
 10. **Phase 10: Mobile iOS + Android** - implement React Native + Expo clients using the

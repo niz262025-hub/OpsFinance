@@ -133,6 +133,32 @@ Transaction
 
 The Phase 6 focused validation passed: 13/13 reconciliation tests passed.
 
+## Phase 7 status
+
+Phase 7 is complete in the validated application codebase. This repository
+includes configurable accounting rules with deterministic evaluation, business-
+scoped persistence, priority ordering, and deterministic tie-breaking for equal
+priority rules. The service supports same-business account and financial account
+references, inactive-account protection, and a Supabase persistence adapter that
+maps the persisted `accounting_rules` contract back to the authoritative
+`AccountingRuleService` model.
+
+The Phase 7 implementation also includes business-scoped RLS protections,
+server-side validation for cross-business account references, and upload/
+convert integration that treats rules as suggestion-only guidance rather than as
+an accounting posting path. The service respects the authoritative accounting
+source of truth and preserves all posted accounting history.
+
+Operating contract:
+
+- `AUTO-SUGGEST = YES`
+- `AUTO-APPROVE = NO`
+- `AUTO-POST = NO`
+
+Accounting Rules provide suggestions only. They cannot automatically approve or
+post financial transactions, bypass the authoritative accounting engine, or
+modify existing posted accounting history.
+
 Read the documents in this order:
 
 1. [PRODUCT_SPEC.md](PRODUCT_SPEC.md) - locked product requirements

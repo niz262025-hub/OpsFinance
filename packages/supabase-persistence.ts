@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { DecimalMoney, type AccountingPeriod, type BusinessAccount, type FinancialAccount, type JournalEntry, type JournalLine } from './accounting';
+import type { AccountingRule, AccountingRuleInput, RuleMatchType } from './accounting-rules';
 import type { TransactionRecord } from './transactions';
 import type { Business, BusinessMember } from './types';
 
@@ -122,6 +123,229 @@ export class SupabaseRepositoryAdapter<T extends BusinessScopedRecord> {
       throw new Error('Record not found for this business.');
     }
     return result.data[0] as T;
+  }
+}
+
+export class SupabaseAccountingRuleRepository extends SupabaseRepositoryAdapter<any> {
+  constructor(client: SupabaseClientLike) {
+    super('accounting_rules', client, 'business_id');
+  }
+
+  private static readonly ruleMatchTypes: RuleMatchType[] = ['CONTAINS', 'EXACT', 'STARTS_WITH', 'ENDS_WITH'];
+
+  private toDomain(row: any): AccountingRule {
+    return {
+      id: row.id,
+      businessId: row.business_id ?? row.businessId,
+      name: row.name,
+      description: row.description ?? null,
+      isActive: row.is_active ?? row.isActive ?? true,
+      priority: Number(row.priority ?? 0),
+      matchType: this.normalizeMatchType(row.match_type ?? row.matchType),
+      matchValue: row.match_value ?? row.matchValue ?? '',
+      suggestedAccountId: row.suggested_account_id ?? row.suggestedAccountId ?? null,
+      suggestedFinancialAccountId: row.suggested_financial_account_id ?? row.suggestedFinancialAccountId ?? null,
+      suggestedTransactionType: row.suggested_transaction_type ?? row.suggestedTransactionType ?? null,
+      autoSuggest: row.auto_suggest ?? row.autoSuggest ?? true,
+      autoPost: row.auto_post ?? row.autoPost ?? false,
+      createdAt: row.created_at ?? row.createdAt ?? new Date().toISOString(),
+      updatedAt: row.updated_at ?? row.updatedAt ?? new Date().toISOString(),
+    };
+  }
+
+  private normalizeMatchType(matchType: string | undefined): RuleMatchType {
+    const normalized = String(matchType ?? 'CONTAINS').toUpperCase();
+    return (SupabaseAccountingRuleRepository.ruleMatchTypes.includes(normalized as RuleMatchType) ? normalized : 'CONTAINS') as RuleMatchType;
+  }
+
+  private toPayload(input: Pick<AccountingRuleInput, 'name' | 'description' | 'isActive' | 'priority' | 'matchType' | 'matchValue' | 'suggestedAccountId' | 'suggestedFinancialAccountId' | 'suggestedTransactionType' | 'autoSuggest' | 'autoPost'> & { businessId: string }): Record<string, any> {
+    return {
+      business_id: sanitizeBusinessId(input.businessId),
+      name: String(input.name ?? '').trim(),
+      description: input.description ?? null,
+      is_active: input.isActive ?? true,
+      priority: Number(input.priority ?? 0),
+      match_type: this.normalizeMatchType(input.matchType),
+      match_value: String(input.matchValue ?? '').trim(),
+      suggested_account_id: input.suggestedAccountId ?? null,
+      suggested_financial_account_id: input.suggestedFinancialAccountId ?? null,
+      suggested_transaction_type: input.suggestedTransactionType ?? null,
+      auto_suggest: input.autoSuggest ?? true,
+      auto_post: false,
+      updated_at: new Date().toISOString(),
+    };
+  }
+
+  private async validateReferences(businessId: string, input: Partial<AccountingRuleInput>): Promise<void> {
+    if (input.autoPost === true) {
+      throw new Error('Accounting rules cannot enable automatic posting.');
+    }
+
+    if (input.matchType && !SupabaseAccountingRuleRepository.ruleMatchTypes.includes(input.matchType)) {
+      throw new Error('Match type is invalid.');
+    }
+
+    if (input.priority !== undefined && (Number.isNaN(Number(input.priority)) || Number(input.priority) < 0)) {
+      throw new Error('Priority must be a non-negative number.');
+    }
+
+    if (input.name !== undefined && !String(input.name ?? '').trim()) {
+      throw new Error('Rule name is required.');
+    }
+
+    if (input.matchValue !== undefined && !String(input.matchValue ?? '').trim()) {
+      throw new Error('Match value is required.');
+    }
+
+    if (input.suggestedAccountId) {
+      const accountResult = await (this.client as any)
+        .from('accounts')
+        .select('id, business_id, is_active')
+        .eq('id', input.suggestedAccountId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (accountResult.error) {
+        throw new Error(accountResult.error.message ?? 'Suggested account validation failed.');
+      }
+
+      if (!accountResult.data) {
+        throw new Error('Referenced account does not belong to the current business.');
+      }
+
+      if (accountResult.data.is_active === false) {
+        throw new Error('Suggested account is inactive.');
+      }
+    }
+
+    if (input.suggestedFinancialAccountId) {
+      const financialResult = await (this.client as any)
+        .from('financial_accounts')
+        .select('id, business_id, status')
+        .eq('id', input.suggestedFinancialAccountId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (financialResult.error) {
+        throw new Error(financialResult.error.message ?? 'Suggested financial account validation failed.');
+      }
+
+      if (!financialResult.data) {
+        throw new Error('Referenced financial account does not belong to the current business.');
+      }
+
+      if (financialResult.data.status !== 'ACTIVE') {
+        throw new Error('Suggested financial account is inactive.');
+      }
+    }
+  }
+
+  async listRules(businessId: string): Promise<AccountingRule[]> {
+    return (await this.listByBusiness(businessId)).map((row) => this.toDomain(row));
+  }
+
+  async getRule(businessId: string, ruleId: string): Promise<AccountingRule> {
+    return this.toDomain(await this.getById(businessId, ruleId));
+  }
+
+  async createRule(input: AccountingRuleInput): Promise<AccountingRule> {
+    const businessId = sanitizeBusinessId(input.businessId);
+    await this.validateReferences(businessId, input);
+
+    const payload = this.toPayload({
+      businessId,
+      name: input.name,
+      description: input.description,
+      isActive: input.isActive ?? true,
+      priority: input.priority ?? 0,
+      matchType: input.matchType,
+      matchValue: input.matchValue,
+      suggestedAccountId: input.suggestedAccountId,
+      suggestedFinancialAccountId: input.suggestedFinancialAccountId,
+      suggestedTransactionType: input.suggestedTransactionType,
+      autoSuggest: input.autoSuggest ?? true,
+      autoPost: false,
+    });
+
+    const result = await (this.client as any)
+      .from('accounting_rules')
+      .insert(payload)
+      .select()
+      .single();
+
+    if (result.error) {
+      throw new Error(result.error.message ?? 'Supabase accounting rule insert failed.');
+    }
+
+    return this.toDomain(result.data);
+  }
+
+  async updateRule(businessId: string, ruleId: string, patch: Partial<AccountingRuleInput>): Promise<AccountingRule> {
+    const scope = sanitizeBusinessId(businessId);
+    const current = await this.getRule(scope, ruleId);
+    const nextInput: AccountingRuleInput = {
+      businessId: scope,
+      userId: 'system',
+      name: patch.name ?? current.name,
+      description: patch.description ?? current.description,
+      isActive: patch.isActive ?? current.isActive,
+      priority: patch.priority ?? current.priority,
+      matchType: patch.matchType ?? current.matchType,
+      matchValue: patch.matchValue ?? current.matchValue,
+      suggestedAccountId: patch.suggestedAccountId ?? current.suggestedAccountId ?? null,
+      suggestedFinancialAccountId: patch.suggestedFinancialAccountId ?? current.suggestedFinancialAccountId ?? null,
+      suggestedTransactionType: patch.suggestedTransactionType ?? current.suggestedTransactionType ?? null,
+      autoSuggest: patch.autoSuggest ?? current.autoSuggest,
+      autoPost: false,
+    };
+
+    await this.validateReferences(scope, nextInput);
+
+    const payload = this.toPayload({
+      businessId: scope,
+      name: nextInput.name,
+      description: nextInput.description,
+      isActive: nextInput.isActive,
+      priority: nextInput.priority,
+      matchType: nextInput.matchType,
+      matchValue: nextInput.matchValue,
+      suggestedAccountId: nextInput.suggestedAccountId,
+      suggestedFinancialAccountId: nextInput.suggestedFinancialAccountId,
+      suggestedTransactionType: nextInput.suggestedTransactionType,
+      autoSuggest: nextInput.autoSuggest,
+      autoPost: false,
+    });
+
+    const result = await (this.client as any)
+      .from('accounting_rules')
+      .update(payload)
+      .eq('id', ruleId)
+      .eq('business_id', scope)
+      .select()
+      .single();
+
+    if (result.error) {
+      throw new Error(result.error.message ?? 'Supabase accounting rule update failed.');
+    }
+
+    return this.toDomain(result.data);
+  }
+
+  async setRuleActive(businessId: string, ruleId: string, isActive: boolean): Promise<AccountingRule> {
+    const scope = sanitizeBusinessId(businessId);
+    const result = await (this.client as any)
+      .from('accounting_rules')
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq('id', ruleId)
+      .eq('business_id', scope)
+      .select()
+      .single();
+
+    if (result.error) {
+      throw new Error(result.error.message ?? 'Supabase accounting rule activation failed.');
+    }
+
+    return this.toDomain(result.data);
   }
 }
 
