@@ -23,11 +23,19 @@ application, TypeScript configuration, PostgreSQL/Supabase migration schema,
 seeded default Chart of Accounts structure, business membership/auth foundation,
 minimal authentication UI, and automated tests for the required scaffolding.
 
-Phase 1.5 is in progress for Supabase UAT verification and database security
-hardening. Live UAT verification remains blocked by the absence of a configured
-Supabase staging project, CLI credentials, and environment variables in this
-workspace. The migration and RLS hardening are prepared for deployment, but they
-have not been applied against a live UAT database in this environment.
+## Phase 2 status
+
+Phase 2 is complete in the application codebase for the shared accounting
+foundation implemented in this repository: accounting primitives, chart-of-
+accounts validation and hierarchy handling, deterministic default starter COA
+provisioning, business-scoped financial account service logic, non-destructive
+archive/deactivate behavior, and safety checks for cross-business isolation.
+
+The live MYOPS/Supabase end-to-end persistence test remains environment-gated
+and requires a configured Supabase project, service-role credentials, and the
+app's live environment variables. Local code validation is passing in this
+workspace, while the live UAT integration remains a deployment prerequisite, not
+an app-code failure.
 
 The repository does not yet include the accounting posting engine, ledger,
 financial reports, reconciliation, upload conversion, or subscription payment

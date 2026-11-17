@@ -391,15 +391,50 @@ export class SupabaseMembershipRepository {
   }
 }
 
+const DEFAULT_STARTER_COA: Array<{
+  code: string;
+  name: string;
+  account_type: string;
+  normal_balance: 'DEBIT' | 'CREDIT';
+  is_system: boolean;
+  is_active: boolean;
+  parent_code?: string;
+}> = [
+  { code: '1000', name: 'Assets', account_type: 'ASSET', normal_balance: 'DEBIT', is_system: true, is_active: true },
+  { code: '1100', name: 'Cash', account_type: 'ASSET', normal_balance: 'DEBIT', is_system: true, is_active: true, parent_code: '1000' },
+  { code: '1110', name: 'Maybank', account_type: 'ASSET', normal_balance: 'DEBIT', is_system: true, is_active: true, parent_code: '1000' },
+  { code: '1120', name: 'CIMB', account_type: 'ASSET', normal_balance: 'DEBIT', is_system: true, is_active: true, parent_code: '1000' },
+  { code: '1200', name: 'Accounts Receivable', account_type: 'ASSET', normal_balance: 'DEBIT', is_system: true, is_active: true, parent_code: '1000' },
+  { code: '1300', name: 'Inventory', account_type: 'ASSET', normal_balance: 'DEBIT', is_system: true, is_active: true, parent_code: '1000' },
+  { code: '2000', name: 'Liabilities', account_type: 'LIABILITY', normal_balance: 'CREDIT', is_system: true, is_active: true },
+  { code: '2100', name: 'Accounts Payable', account_type: 'LIABILITY', normal_balance: 'CREDIT', is_system: true, is_active: true, parent_code: '2000' },
+  { code: '2200', name: 'Bank Loan', account_type: 'LIABILITY', normal_balance: 'CREDIT', is_system: true, is_active: true, parent_code: '2000' },
+  { code: '3000', name: 'Equity', account_type: 'EQUITY', normal_balance: 'CREDIT', is_system: true, is_active: true },
+  { code: '3100', name: 'Capital', account_type: 'EQUITY', normal_balance: 'CREDIT', is_system: true, is_active: true, parent_code: '3000' },
+  { code: '3200', name: 'Retained Earnings', account_type: 'EQUITY', normal_balance: 'CREDIT', is_system: true, is_active: true, parent_code: '3000' },
+  { code: '3300', name: 'Drawings', account_type: 'EQUITY', normal_balance: 'CREDIT', is_system: true, is_active: true, parent_code: '3000' },
+  { code: '4000', name: 'Revenue', account_type: 'REVENUE', normal_balance: 'CREDIT', is_system: true, is_active: true },
+  { code: '4100', name: 'Sales', account_type: 'REVENUE', normal_balance: 'CREDIT', is_system: true, is_active: true, parent_code: '4000' },
+  { code: '4200', name: 'Other Income', account_type: 'REVENUE', normal_balance: 'CREDIT', is_system: true, is_active: true, parent_code: '4000' },
+  { code: '5000', name: 'COGS', account_type: 'COGS', normal_balance: 'DEBIT', is_system: true, is_active: true },
+  { code: '5100', name: 'Cost of Goods Sold', account_type: 'COGS', normal_balance: 'DEBIT', is_system: true, is_active: true, parent_code: '5000' },
+  { code: '6000', name: 'Expenses', account_type: 'EXPENSE', normal_balance: 'DEBIT', is_system: true, is_active: true },
+  { code: '6100', name: 'Rental', account_type: 'EXPENSE', normal_balance: 'DEBIT', is_system: true, is_active: true, parent_code: '6000' },
+  { code: '6200', name: 'Salary', account_type: 'EXPENSE', normal_balance: 'DEBIT', is_system: true, is_active: true, parent_code: '6000' },
+  { code: '6300', name: 'Petrol', account_type: 'EXPENSE', normal_balance: 'DEBIT', is_system: true, is_active: true, parent_code: '6000' },
+  { code: '6400', name: 'Utilities', account_type: 'EXPENSE', normal_balance: 'DEBIT', is_system: true, is_active: true, parent_code: '6000' },
+  { code: '6500', name: 'Advertising', account_type: 'EXPENSE', normal_balance: 'DEBIT', is_system: true, is_active: true, parent_code: '6000' },
+  { code: '6600', name: 'Bank Charges', account_type: 'EXPENSE', normal_balance: 'DEBIT', is_system: true, is_active: true, parent_code: '6000' },
+];
+
 export class SupabaseFinancialAccountRepository extends SupabaseRepositoryAdapter<FinancialAccount> {
   constructor(client: SupabaseClientLike) {
     super('financial_accounts', client, 'business_id');
   }
 
-  async upsertByCode(businessId: string, account: Omit<FinancialAccount, 'id' | 'businessId'> & { id?: string; business_id?: string }): Promise<FinancialAccount> {
+  async upsertByCode(businessId: string, account: Omit<FinancialAccount, 'id' | 'businessId'> & { id?: string; business_id?: string; account_id?: string | null }): Promise<FinancialAccount> {
     const scope = sanitizeBusinessId(businessId);
-    const payload = {
-      id: account.id,
+    const payload: Record<string, any> = {
       business_id: scope,
       name: account.name,
       type: account.type,
@@ -409,6 +444,29 @@ export class SupabaseFinancialAccountRepository extends SupabaseRepositoryAdapte
       opening_balance_date: null,
       status: account.status ?? 'ACTIVE',
     };
+
+    if (account.id) {
+      payload.id = account.id;
+    }
+
+    const accountId = account.account_id ?? account.accountId ?? null;
+    if (accountId) {
+      const { data: accountRow, error: accountError } = await (this['client'] as any)
+        .from('accounts')
+        .select('id, business_id')
+        .eq('id', accountId)
+        .maybeSingle();
+
+      if (accountError) {
+        throw new Error(accountError.message ?? 'Chart-of-accounts mapping lookup failed.');
+      }
+
+      if (!accountRow || accountRow.business_id !== scope) {
+        throw new Error('COA mapping does not belong to this business.');
+      }
+
+      payload.account_id = accountId;
+    }
 
     const result = await (this['client'] as any).from('financial_accounts').upsert(payload, { onConflict: 'business_id,account_code' }).select().single();
     if (result.error) {
@@ -423,18 +481,55 @@ export class SupabaseAccountRepository extends SupabaseRepositoryAdapter<any> {
     super('accounts', client, 'business_id');
   }
 
-  async upsertByCode(businessId: string, account: { code: string; name: string; account_type: string; normal_balance: 'DEBIT' | 'CREDIT'; is_system?: boolean; is_active?: boolean; parent_id?: string | null }): Promise<any> {
+  async upsertByCode(businessId: string, account: { code: string; name: string; account_type: string; normal_balance: 'DEBIT' | 'CREDIT'; is_system?: boolean; is_active?: boolean; parent_id?: string | null; parentCode?: string | null }): Promise<any> {
     const scope = sanitizeBusinessId(businessId);
-    const payload = {
+
+    let parentId = account.parent_id ?? null;
+    if (!parentId && account.parentCode) {
+      const parentLookup = await (this['client'] as any)
+        .from('accounts')
+        .select('id, business_id')
+        .eq('business_id', scope)
+        .eq('code', account.parentCode)
+        .maybeSingle();
+
+      if (parentLookup.error) {
+        throw new Error(parentLookup.error.message ?? 'Parent account validation failed.');
+      }
+
+      if (!parentLookup.data) {
+        throw new Error(`Parent account ${account.parentCode} does not exist for this business.`);
+      }
+
+      parentId = parentLookup.data.id;
+    }
+
+    const payload: Record<string, any> = {
       business_id: scope,
       code: account.code,
       name: account.name,
       account_type: account.account_type,
-      parent_id: account.parent_id ?? null,
+      parent_id: parentId,
       normal_balance: account.normal_balance as 'DEBIT' | 'CREDIT',
       is_system: account.is_system ?? false,
       is_active: account.is_active ?? true,
     };
+
+    if (parentId) {
+      const { data: parentRow, error: parentError } = await (this['client'] as any)
+        .from('accounts')
+        .select('id, business_id')
+        .eq('id', parentId)
+        .maybeSingle();
+
+      if (parentError) {
+        throw new Error(parentError.message ?? 'Parent account validation failed.');
+      }
+
+      if (!parentRow || parentRow.business_id !== scope) {
+        throw new Error('Parent account does not belong to this business.');
+      }
+    }
 
     const result = await (this['client'] as any).from('accounts').upsert(payload, { onConflict: 'business_id,code' }).select().single();
     if (result.error) {
@@ -444,23 +539,24 @@ export class SupabaseAccountRepository extends SupabaseRepositoryAdapter<any> {
   }
 
   async ensureDefaultAccounts(businessId: string): Promise<Record<string, any>[]> {
-    const defaults: Array<{ code: string; name: string; account_type: string; normal_balance: 'DEBIT' | 'CREDIT'; is_system: boolean; is_active: boolean }> = [
-      { code: '1000', name: 'Assets', account_type: 'ASSET', normal_balance: 'DEBIT', is_system: true, is_active: true },
-      { code: '1100', name: 'Cash', account_type: 'ASSET', normal_balance: 'DEBIT', is_system: true, is_active: true },
-      { code: '1110', name: 'Maybank', account_type: 'ASSET', normal_balance: 'DEBIT', is_system: true, is_active: true },
-      { code: '4000', name: 'Revenue', account_type: 'REVENUE', normal_balance: 'CREDIT', is_system: true, is_active: true },
-      { code: '4100', name: 'Sales', account_type: 'REVENUE', normal_balance: 'CREDIT', is_system: true, is_active: true },
-      { code: '6000', name: 'Expenses', account_type: 'EXPENSE', normal_balance: 'DEBIT', is_system: true, is_active: true },
-      { code: '6100', name: 'Rental', account_type: 'EXPENSE', normal_balance: 'DEBIT', is_system: true, is_active: true },
-    ];
+    const scope = sanitizeBusinessId(businessId);
+    const insertedByCode = new Map<string, Record<string, any>>();
 
-    const created: Record<string, any>[] = [];
-    for (const account of defaults) {
-      const row = await this.upsertByCode(businessId, account);
-      created.push(row);
+    for (const account of DEFAULT_STARTER_COA) {
+      const parent = account.parent_code ? insertedByCode.get(account.parent_code) : null;
+      const row = await this.upsertByCode(scope, {
+        code: account.code,
+        name: account.name,
+        account_type: account.account_type,
+        normal_balance: account.normal_balance,
+        is_system: account.is_system,
+        is_active: account.is_active,
+        parent_id: parent?.id ?? null,
+      });
+      insertedByCode.set(account.code, row);
     }
 
-    return created;
+    return [...insertedByCode.values()];
   }
 }
 

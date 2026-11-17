@@ -11,8 +11,11 @@ of truth in [ACCOUNTING_ENGINE.md](ACCOUNTING_ENGINE.md).
 1. **Phase 1: Project setup + database + authentication** - establish the application
    repositories/runtime, PostgreSQL foundation, migrations, identity, and
    membership checks.
-2. **Phase 2: Accounting engine + Chart of Accounts + Financial Accounts** - implement
-   shared server-side accounting primitives and default Starter accounts.
+2. **Phase 2: Accounting engine + Chart of Accounts + Financial Accounts** - complete
+   in code for shared server-side accounting primitives, business-scoped starter
+   chart provisioning, financial account lifecycle enforcement, and cross-business
+   safety guards. Live Supabase UAT verification remains gated on configured project
+   credentials and environment variables; Phase 3 has not started.
 3. **Phase 3: Transactions + Journal + Ledger** - implement transaction lifecycle,
    balanced atomic posting, immutable corrections, and ledger queries.
 4. **Phase 4: Financial Reports** - implement the six reports from posted journal lines.
