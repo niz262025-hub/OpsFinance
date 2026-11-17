@@ -22,10 +22,13 @@ of truth in [ACCOUNTING_ENGINE.md](ACCOUNTING_ENGINE.md).
    reversal/correction support, and ledger queries derived exclusively from
    posted journal lines. Closed-period checks, cross-business isolation, and
    audit trail enforcement are included.
-4. **Phase 4: Financial Reports** - not started; implement the six reports from posted
-   journal lines.
-5. **Phase 5: Upload & Convert** - implement secure extraction, normalization,
-   suggestions, review, approval, and non-automatic posting flow.
+4. **Phase 4: Financial Reports** - complete. This phase includes the six required
+   reports: Trial Balance, Profit & Loss, Balance Sheet, Cash Flow, General
+   Ledger, and Account Statement. Reporting is derived exclusively from POSTED
+   journal lines, respects business isolation, handles reversal/correction
+   semantics, and uses deterministic DecimalMoney aggregation for all balances.
+5. **Phase 5: Upload & Convert** - next phase; implement secure extraction,
+   normalization, suggestions, review, approval, and non-automatic posting flow.
 6. **Phase 6: Bank Reconciliation** - implement matching, differences, locks, history,
    and audit without bypassing the accounting engine.
 7. **Phase 7: Accounting Rules** - implement configurable, testable rule evaluation.

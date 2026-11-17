@@ -51,8 +51,29 @@ closed accounting period protection, cross-business transaction/journal/ledger
 isolation, posting and reversal audit traces, and database-level safeguards in
 Supabase for business-scoped immutability and integrity enforcement.
 
-The repository does not yet include financial reports, reconciliation,
-upload conversion, or subscription payment processing.
+## Phase 4 status
+
+Phase 4 is complete. The repository contains the six required financial reports
+and they are validated in the current codebase:
+
+- Trial Balance
+- Profit & Loss
+- Balance Sheet
+- Cash Flow
+- General Ledger
+- Account Statement
+
+Only POSTED journal lines affect financial reports. The report layer uses the
+authoritative accounting/ledger path and no second financial calculation source
+has been introduced. Business isolation, reversal handling, and deterministic
+monetary calculations remain enforced through the shared accounting engine.
+
+Validation passed for the focused report suite: 27/27 tests passed. Typecheck,
+lint, and production build also passed in this environment.
+
+The live MYOPS/Supabase end-to-end persistence test remains environment-gated and
+requires configured project credentials; it was not validated here because the
+required live environment was unavailable.
 
 Read the documents in this order:
 
