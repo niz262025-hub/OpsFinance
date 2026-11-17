@@ -159,6 +159,34 @@ Accounting Rules provide suggestions only. They cannot automatically approve or
 post financial transactions, bypass the authoritative accounting engine, or
 modify existing posted accounting history.
 
+## Phase 8 status
+
+Phase 8 is complete. This repository includes the validated subscription and
+Starter entitlement contract, with server-side enforcement for the required
+business and user limits.
+
+Starter contract:
+
+- Price: RM29/month
+- Businesses: 1
+- Users: 1
+
+The validated implementation preserves a strict separation between subscription
+state and customer accounting state. Subscription and entitlement checks are
+business-scoped and enforced server-side, while accounting activity remains
+owned by the authoritative posted journal/ledger/report path. Subscription
+suspension does not delete accounting history or rewrite posted journal data.
+
+Operating contract:
+
+- `AUTO-SUGGEST = YES`
+- `AUTO-APPROVE = NO`
+- `AUTO-POST = NO`
+
+The subscription layer is not a second accounting engine. It remains a billing
+and entitlement function that cannot automatically create customer transactions,
+journals, journal lines, or ledger entries.
+
 Read the documents in this order:
 
 1. [PRODUCT_SPEC.md](PRODUCT_SPEC.md) - locked product requirements
