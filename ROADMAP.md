@@ -49,10 +49,13 @@ of truth in [ACCOUNTING_ENGINE.md](ACCOUNTING_ENGINE.md).
    the validated Starter contract, server-side business/user limits, business-
    scoped entitlement enforcement, payment/accounting separation, and suspension
    safety that retains accounting history without deleting posted journal data.
-9. **Phase 9: Web UI** - next planned phase; not started. Implement the locked
-   navigation and workflows in Next.js.
-10. **Phase 10: Mobile iOS + Android** - implement React Native + Expo clients using the
-    same API and accounting engine.
+9. **Phase 9: Web UI** - complete. This phase includes the validated Next.js Web UI,
+   production-safe authentication, tenant-aware business workflows, transaction
+   processing, upload/review workflows, bank reconciliation, six financial
+   reports, Accounting Rules, subscription settings, and production preview
+   protection that keeps preview/demo data out of production.
+10. **Phase 10: Mobile iOS + Android** - next planned phase. Do not start until the
+    validated web UI and server/accounting contract remain in place.
 11. **Phase 11: Security hardening + QA** - complete threat review, isolation tests,
     upload tests, integrity tests, performance, accessibility, and recovery
     verification.

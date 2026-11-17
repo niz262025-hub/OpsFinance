@@ -187,6 +187,63 @@ The subscription layer is not a second accounting engine. It remains a billing
 and entitlement function that cannot automatically create customer transactions,
 journals, journal lines, or ledger entries.
 
+## Phase 9 status
+
+Phase 9 is complete. This repository contains the validated Next.js Web UI for
+production-safe authentication, tenant-aware business context, workflow routing,
+and the authoritative accounting/reporting experience across the product.
+
+The Web UI is a presentation and workflow layer over the authoritative
+OpsFinance server and accounting services. The Web UI does not introduce a
+second financial calculation or posting path. Production authentication and
+tenant isolation cannot fall back to preview/demo data.
+
+Development preview remains allowed only when:
+
+- the environment is development
+- explicit preview opt-in is enabled
+
+Production preview bypass remains disabled even when the preview flag is set.
+
+Included and validated UI coverage:
+
+- production-safe authentication
+- business / tenant context resolution
+- Dashboard
+- Chart of Accounts
+- Financial Accounts
+- Transactions
+- Upload & Convert
+- Bank Reconciliation
+- six Financial Reports
+- Accounting Rules
+- Subscription / Starter settings
+- loading, empty, error, and unauthorized states
+- responsive layout behavior
+- accessibility baseline
+
+The user-facing workflow contract remains:
+
+- `AUTO-SUGGEST = YES`
+- `AUTO-APPROVE = NO`
+- `AUTO-POST = NO`
+
+The authoritative server/accounting path remains the source of truth for all
+posted accounting activity and financial reports.
+
+Focused validation completed in this workspace:
+
+- 11 focused UI/workflow test files passed
+- 44/44 focused tests passed
+- Typecheck PASS
+- Lint PASS
+- Production build PASS
+
+Known live integration caveat:
+
+- `tests/supabase-accounting-persistence.test.ts`
+- `ENVIRONMENT BLOCKED: MYOPS application access required.`
+
 Read the documents in this order:
 
 1. [PRODUCT_SPEC.md](PRODUCT_SPEC.md) - locked product requirements
