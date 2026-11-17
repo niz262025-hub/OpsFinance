@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { AccountingEngine } from '../packages/accounting';
 import { isAllowedImportTransition, validateCsvBankStatement } from '../packages/csv-import';
+import { FinancialReportService } from '../packages/reports';
 import { ReconciliationService } from '../packages/reconciliation';
 import { UploadConvertService } from '../packages/upload';
 
@@ -124,6 +125,59 @@ describe('Phase 7 upload and convert hardening', () => {
     expect(invoice.normalized.amount).toBe('2000.00');
     expect(receipt.suggestion.type).toBe('MONEY_OUT');
     expect(receipt.normalized.amount).toBe('300.00');
+  });
+
+  it('requires explicit approval before any extraction or suggestion becomes a posted journal, even at maximum supported confidence', () => {
+    const localEngine = new AccountingEngine({
+      businessId,
+      accounts: [
+        { id: revenueAccountId, businessId, code: '4000', name: 'Sales', accountType: 'REVENUE', normalBalance: 'CREDIT', isSystem: false, isActive: true },
+        { id: expenseAccountId, businessId, code: '6000', name: 'Petrol', accountType: 'EXPENSE', normalBalance: 'DEBIT', isSystem: false, isActive: true },
+        { id: cashAccountId, businessId, code: '1100', name: 'Cash', accountType: 'ASSET', normalBalance: 'DEBIT', isSystem: false, isActive: true },
+      ],
+      periods: [{ id: 'period-1', businessId, name: '2026-09', startDate: '2026-09-01', endDate: '2026-09-30', status: 'OPEN' }],
+      financialAccounts: [{ id: bankAccountId, businessId, name: 'Maybank', type: 'BANK', accountCode: 'MAYBANK', currency: 'MYR', status: 'ACTIVE' }],
+    });
+    const service = new UploadConvertService(localEngine);
+    const csv = 'Date,Description,Reference,Debit,Credit,Balance\n2026-09-12,Customer payment,INV-5001,,1500.00,1500.00';
+    const batch = service.processBankStatementCsv(csv, 'high-confidence.csv', businessId, 'user-1');
+
+    expect(batch.candidates).toHaveLength(1);
+    const candidate = batch.candidates[0];
+    expect(candidate.status).toBe('PARSED');
+    expect(candidate.confidence).toBeGreaterThan(0);
+    expect(candidate.confidence).toBeLessThanOrEqual(100);
+    expect(candidate.suggestion).toBeTruthy();
+    expect(candidate.suggestion.type).toBe('MONEY_IN');
+
+    const postedBeforeApproval = [...(localEngine as any).journals.values()].filter((journal) => journal.status === 'POSTED');
+    expect(postedBeforeApproval).toHaveLength(0);
+
+    const reportService = new FinancialReportService(localEngine);
+    const beforeLedger = reportService.getGeneralLedger({ businessId, dateFrom: '2026-09-01', dateTo: '2026-09-30', accountId: revenueAccountId });
+    const beforeTrial = reportService.getTrialBalance({ businessId, dateFrom: '2026-09-01', dateTo: '2026-09-30' });
+    const beforePnl = reportService.getProfitAndLoss({ businessId, dateFrom: '2026-09-01', dateTo: '2026-09-30' });
+    const beforeSheet = reportService.getBalanceSheet({ businessId, dateFrom: '2026-09-01', dateTo: '2026-09-30' });
+    const beforeCashFlow = reportService.getCashFlow({ businessId, dateFrom: '2026-09-01', dateTo: '2026-09-30' });
+
+    expect(beforeLedger.rows).toHaveLength(0);
+    expect(beforeTrial.isBalanced).toBe(true);
+    expect(beforePnl.revenueTotal).toBe('0.00');
+    expect(beforeSheet.isBalanced).toBe(true);
+    expect(beforeCashFlow.netCashFlow).toBe('0.00');
+
+    const approved = service.approveCandidate(candidate.id, 'user-1');
+    expect(approved.status).toBe('APPROVED');
+
+    const posted = service.postApprovedCandidate(candidate.id, 'user-1', businessId);
+    expect(posted.status).toBe('POSTED');
+    expect(posted.journalId).toBeTruthy();
+    const postedJournalsAfterApproval = [...(localEngine as any).journals.values()].filter((journal) => journal.status === 'POSTED');
+    expect(postedJournalsAfterApproval.length).toBeGreaterThan(0);
+
+    const postedLedger = localEngine.getLedger({ businessId, accountId: revenueAccountId, startDate: '2026-09-01', endDate: '2026-09-30' });
+    expect(postedLedger.entries.length).toBeGreaterThan(0);
+    expect(postedLedger.balance).toBe('1500.00');
   });
 
   it('posts uploaded bank statements through the real accounting boundary', () => {
@@ -342,6 +396,62 @@ describe('Phase 7 upload and convert hardening', () => {
     expect(() => service.getUploadRecord(upload.id, otherBusinessId)).toThrow();
     expect(() => service.listUploads(otherBusinessId)).toThrow();
     expect(() => service.getUploadAuditTrail(upload.id, otherBusinessId)).toThrow();
+  });
+
+  it('prevents business B from modifying, approving, or retrying business A upload data', () => {
+    const service = new UploadConvertService(engine);
+    const csv = 'Date,Description,Reference,Debit,Credit,Balance\n2026-09-12,Customer payment,INV-2009,,310.00,4800.00';
+    const batch = service.processBankStatementCsv(csv, 'cross-business.csv', businessId, 'user-1');
+    const candidate = batch.candidates[0];
+    const businessBService = new UploadConvertService(new AccountingEngine({
+      businessId: otherBusinessId,
+      accounts: [
+        { id: 'other-revenue', businessId: otherBusinessId, code: '4000', name: 'Other Revenue', accountType: 'REVENUE', normalBalance: 'CREDIT', isSystem: false, isActive: true },
+        { id: 'other-cash', businessId: otherBusinessId, code: '1100', name: 'Other Cash', accountType: 'ASSET', normalBalance: 'DEBIT', isSystem: false, isActive: true },
+      ],
+      periods: [{ id: 'period-other', businessId: otherBusinessId, name: '2026-09', startDate: '2026-09-01', endDate: '2026-09-30', status: 'OPEN' }],
+      financialAccounts: [{ id: 'other-bank', businessId: otherBusinessId, name: 'Other Bank', type: 'BANK', accountCode: 'BANK2', currency: 'MYR', status: 'ACTIVE' }],
+    }));
+
+    expect(() => businessBService.updateCandidateMapping(candidate.id, { amount: '999.00' })).toThrow('Candidate not found.');
+    expect(() => businessBService.approveCandidate(candidate.id, 'business-b-user')).toThrow('Candidate not found.');
+    expect(() => businessBService.postApprovedCandidate(candidate.id, 'business-b-user', otherBusinessId)).toThrow('Approved candidate not found.');
+
+    const upload = service.listUploads(businessId).find((entry) => entry.filename === 'cross-business.csv');
+    expect(upload).toBeTruthy();
+    expect(() => service.getUploadRecord(upload!.id, otherBusinessId)).toThrow();
+    expect(() => service.retryParseUpload(upload!.id, otherBusinessId, csv)).toThrow();
+  });
+
+  it('fails extraction for malformed invoice and receipt inputs without posting accounting entries', () => {
+    const localEngine = new AccountingEngine({
+      businessId,
+      accounts: [
+        { id: revenueAccountId, businessId, code: '4000', name: 'Sales', accountType: 'REVENUE', normalBalance: 'CREDIT', isSystem: false, isActive: true },
+        { id: expenseAccountId, businessId, code: '6000', name: 'Petrol', accountType: 'EXPENSE', normalBalance: 'DEBIT', isSystem: false, isActive: true },
+        { id: cashAccountId, businessId, code: '1100', name: 'Cash', accountType: 'ASSET', normalBalance: 'DEBIT', isSystem: false, isActive: true },
+      ],
+      periods: [{ id: 'period-1', businessId, name: '2026-09', startDate: '2026-09-01', endDate: '2026-09-30', status: 'OPEN' }],
+      financialAccounts: [{ id: bankAccountId, businessId, name: 'Maybank', type: 'BANK', accountCode: 'MAYBANK', currency: 'MYR', status: 'ACTIVE' }],
+    });
+    const service = new UploadConvertService(localEngine);
+
+    expect(() => service.extractInvoice({
+      businessId,
+      sourceType: 'INVOICE',
+      rawText: 'No valid total or date here',
+      uploadedBy: 'user-1',
+    })).toThrow('Invoice amount is required.');
+
+    expect(() => service.extractReceipt({
+      businessId,
+      sourceType: 'RECEIPT',
+      rawText: 'No valid total or date here',
+      uploadedBy: 'user-1',
+    })).toThrow('Receipt amount is required.');
+
+    expect([...(localEngine as any).journals.values()].length).toBe(0);
+    expect((localEngine as any).transactions?.size ?? 0).toBe(0);
   });
 
   it('rejects invalid dates and preserves raw, normalized, and import metadata', () => {

@@ -38,9 +38,9 @@ export class FinancialAccountService {
     this.engine = engine;
   }
 
-  private getBusinessAccounts(): BusinessAccount[] {
+  private getBusinessAccounts(businessId: string): BusinessAccount[] {
     return [...((this.engine as any).accounts as Map<string, BusinessAccount>).values()].filter(
-      (account) => account.businessId === this.engine.businessId,
+      (account) => account.businessId === businessId,
     );
   }
 
@@ -60,7 +60,7 @@ export class FinancialAccountService {
   }
 
   private getOpeningEquityAccount(businessId: string): BusinessAccount {
-    const account = this.getBusinessAccounts().find(
+    const account = this.getBusinessAccounts(businessId).find(
       (entry) => entry.businessId === businessId && entry.accountType === 'EQUITY' && entry.isSystem,
     );
     if (!account) {
@@ -211,5 +211,14 @@ export class FinancialAccountService {
     this.registerFinancialAccount(updated);
 
     return updated;
+  }
+
+  deactivateFinancialAccount(businessId: string, id: string): FinancialAccountRecord {
+    this.engine.authorizeBusiness(businessId, this.engine.businessId);
+    return this.updateFinancialAccount({ businessId, id, status: 'INACTIVE' });
+  }
+
+  archiveFinancialAccount(businessId: string, id: string): FinancialAccountRecord {
+    return this.deactivateFinancialAccount(businessId, id);
   }
 }

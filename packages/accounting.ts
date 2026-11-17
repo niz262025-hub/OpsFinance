@@ -487,6 +487,10 @@ export class AccountingEngine {
       return period.businessId === input.businessId && d >= start && d <= end;
     });
 
+    if (periodList.some((period) => period.businessId === input.businessId) && !matchingPeriod) {
+      errors.push('Journal date must fall within an open accounting period for this business.');
+    }
+
     if (matchingPeriod?.status === 'CLOSED') {
       errors.push('Transaction cannot be posted because the accounting period is closed.');
     }

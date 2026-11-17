@@ -264,4 +264,8 @@ export class ChartOfAccountsService {
     this.authorizeBusiness(businessId);
     return this.updateAccount({ businessId, id, isActive: false });
   }
+
+  archiveAccount(businessId: string, id: string): BusinessAccount {
+    return this.deactivateAccount(businessId, id);
+  }
 }
