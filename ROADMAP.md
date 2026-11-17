@@ -6,19 +6,24 @@ of truth in [ACCOUNTING_ENGINE.md](ACCOUNTING_ENGINE.md).
 
 ## Phases
 
-0. **Phase 0: Foundation documentation** - lock product, accounting, data, security,
-   workflow, and roadmap requirements.
-1. **Phase 1: Project setup + database + authentication** - establish the application
-   repositories/runtime, PostgreSQL foundation, migrations, identity, and
-   membership checks.
-2. **Phase 2: Accounting engine + Chart of Accounts + Financial Accounts** - complete
-   in code for shared server-side accounting primitives, business-scoped starter
-   chart provisioning, financial account lifecycle enforcement, and cross-business
-   safety guards. Live Supabase UAT verification remains gated on configured project
-   credentials and environment variables; Phase 3 has not started.
-3. **Phase 3: Transactions + Journal + Ledger** - implement transaction lifecycle,
-   balanced atomic posting, immutable corrections, and ledger queries.
-4. **Phase 4: Financial Reports** - implement the six reports from posted journal lines.
+0. **Phase 0: Foundation documentation** - complete and locked. The product,
+   accounting, data, security, workflow, and roadmap requirements are set.
+1. **Phase 1: Project setup + database + authentication** - complete. The repository
+   includes the application runtime, PostgreSQL/Supabase foundation, migrations,
+   identity, and membership checks.
+2. **Phase 2: Accounting engine + Chart of Accounts + Financial Accounts** - complete.
+   This phase includes shared server-side accounting primitives, business-scoped
+   starter chart provisioning, financial account lifecycle enforcement, and
+   cross-business safety guards. Live Supabase UAT verification remains gated on
+   configured project credentials and environment variables.
+3. **Phase 3: Transactions + Journal + Ledger** - complete. This phase includes the
+   transaction lifecycle, journal entry and journal line creation, balanced
+   journal validation, atomic posting, posting idempotency, immutability guards,
+   reversal/correction support, and ledger queries derived exclusively from
+   posted journal lines. Closed-period checks, cross-business isolation, and
+   audit trail enforcement are included.
+4. **Phase 4: Financial Reports** - not started; implement the six reports from posted
+   journal lines.
 5. **Phase 5: Upload & Convert** - implement secure extraction, normalization,
    suggestions, review, approval, and non-automatic posting flow.
 6. **Phase 6: Bank Reconciliation** - implement matching, differences, locks, history,

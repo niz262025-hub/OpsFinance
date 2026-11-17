@@ -37,9 +37,22 @@ app's live environment variables. Local code validation is passing in this
 workspace, while the live UAT integration remains a deployment prerequisite, not
 an app-code failure.
 
-The repository does not yet include the accounting posting engine, ledger,
-financial reports, reconciliation, upload conversion, or subscription payment
-processing.
+## Phase 3 status
+
+Phase 3 is complete in the application codebase for the server-side transaction
+and journal flow. This repository now includes the transaction lifecycle,
+journal entry creation, journal line creation, balanced journal validation,
+atomic posting, posting idempotency, posted journal immutability, posted
+journal-line immutability, reversal/correction support, and ledger queries that
+derive exclusively from posted journal lines.
+
+The implementation also includes debit-normal and credit-normal running balances,
+closed accounting period protection, cross-business transaction/journal/ledger
+isolation, posting and reversal audit traces, and database-level safeguards in
+Supabase for business-scoped immutability and integrity enforcement.
+
+The repository does not yet include financial reports, reconciliation,
+upload conversion, or subscription payment processing.
 
 Read the documents in this order:
 
