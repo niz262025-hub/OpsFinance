@@ -27,10 +27,16 @@ of truth in [ACCOUNTING_ENGINE.md](ACCOUNTING_ENGINE.md).
    Ledger, and Account Statement. Reporting is derived exclusively from POSTED
    journal lines, respects business isolation, handles reversal/correction
    semantics, and uses deterministic DecimalMoney aggregation for all balances.
-5. **Phase 5: Upload & Convert** - next phase; implement secure extraction,
-   normalization, suggestions, review, approval, and non-automatic posting flow.
-6. **Phase 6: Bank Reconciliation** - implement matching, differences, locks, history,
-   and audit without bypassing the accounting engine.
+5. **Phase 5: Upload & Convert** - complete. This phase includes secure file
+   validation, extraction, normalization, accounting suggestions, duplicate and
+   idempotency controls, business isolation, review-first workflow, and explicit
+   approval before any posting action. Safety contract: `AUTO-SUGGEST = YES` and
+   `AUTO-POST = NO`. Even at 100% extraction confidence, no financial transaction
+   may be automatically approved or posted. Posting remains a separate explicit
+   step that uses the existing authoritative Phase 3 accounting engine.
+6. **Phase 6: Bank Reconciliation** - next planned phase; not started. Implement
+   matching, differences, locks, history, and audit without bypassing the
+   accounting engine.
 7. **Phase 7: Accounting Rules** - implement configurable, testable rule evaluation.
 8. **Phase 8: Subscription + Starter entitlement** - implement plan lifecycle,
    server-side limits, payment separation, and retained data on suspension.

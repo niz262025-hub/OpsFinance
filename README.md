@@ -75,6 +75,34 @@ The live MYOPS/Supabase end-to-end persistence test remains environment-gated an
 requires configured project credentials; it was not validated here because the
 required live environment was unavailable.
 
+## Phase 5 status
+
+Phase 5 is complete. The repository includes the secure upload and conversion
+workflow required for filing and review-first document processing:
+
+- Upload & Convert
+- file validation
+- extraction
+- normalization
+- accounting suggestions
+- human review
+- explicit approval
+- duplicate and idempotency controls
+- business isolation
+- malformed extraction safety
+- existing accounting-engine handoff
+
+The operating contract is explicit: `AUTO-SUGGEST = YES` and `AUTO-POST = NO`.
+Even 100% extraction confidence cannot automatically approve or post a financial
+transaction. Uploaded and extracted data must pass the required human review and
+explicit approval workflow before any subsequent posting action. Any subsequent
+posting uses the existing authoritative Phase 3 accounting engine, not a second
+financial posting path.
+
+The Phase 5 focused suite passed in this workspace, and the live Supabase
+integration remains environment-blocked when the required MYOPS application access
+is unavailable.
+
 Read the documents in this order:
 
 1. [PRODUCT_SPEC.md](PRODUCT_SPEC.md) - locked product requirements
