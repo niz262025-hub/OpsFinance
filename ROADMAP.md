@@ -34,10 +34,14 @@ of truth in [ACCOUNTING_ENGINE.md](ACCOUNTING_ENGINE.md).
    `AUTO-POST = NO`. Even at 100% extraction confidence, no financial transaction
    may be automatically approved or posted. Posting remains a separate explicit
    step that uses the existing authoritative Phase 3 accounting engine.
-6. **Phase 6: Bank Reconciliation** - next planned phase; not started. Implement
-   matching, differences, locks, history, and audit without bypassing the
-   accounting engine.
-7. **Phase 7: Accounting Rules** - implement configurable, testable rule evaluation.
+6. **Phase 6: Bank Reconciliation** - complete. This phase includes the validated
+   reconciliation workflow for session-based matching, unmatched and partial
+   differences, completion guards, and reconciliation lock/audit history without
+   creating a second ledger or altering posted accounting balances. Bank and
+   statement evidence are compared against the authoritative POSTED accounting
+   ledger and report path.
+7. **Phase 7: Accounting Rules** - next planned phase; not started. Implement
+   configurable, testable rule evaluation.
 8. **Phase 8: Subscription + Starter entitlement** - implement plan lifecycle,
    server-side limits, payment separation, and retained data on suspension.
 9. **Phase 9: Web UI** - implement the locked navigation and workflows in Next.js.

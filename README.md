@@ -103,6 +103,36 @@ The Phase 5 focused suite passed in this workspace, and the live Supabase
 integration remains environment-blocked when the required MYOPS application access
 is unavailable.
 
+## Phase 6 status
+
+Phase 6 is complete in the validated implementation. The repository contains the
+bank reconciliation workflow implemented and checked for the actual accounting
+boundary:
+
+- bank / statement matching against posted accounting data
+- session-based reconciliation workflow
+- bank transaction and book transaction matching
+- unmatched and partial difference analysis
+- reconciliation completion guards
+- lock and audit history enforcement
+- business-scoped isolation
+
+The authoritative accounting rule is explicit: Bank reconciliation compares bank
+and statement evidence against the authoritative POSTED accounting ledger. It
+must never create a second ledger, replace book balances with bank balances, or
+silently create balancing transactions, journals, or journal lines. Posted
+accounting history remains immutable and authoritative.
+
+The reconciled workflow continues to preserve the source-of-truth path:
+
+Transaction
+→ Journal Entry + Journal Lines
+→ POSTED
+→ Ledger
+→ Reports
+
+The Phase 6 focused validation passed: 13/13 reconciliation tests passed.
+
 Read the documents in this order:
 
 1. [PRODUCT_SPEC.md](PRODUCT_SPEC.md) - locked product requirements
