@@ -8,7 +8,32 @@ export interface MyopsBundleEntitlement {
  session_active?: boolean;
  access_mode?: 'paid' | 'trial' | string | null;
  trial?: { id?: string; expires_at?: string; policy_version?: number } | null;
- bundle?: { app?: string; monthly_price?: string; currency?: string; plan?: string } | null;
+ bundle?: { app?: string | number; monthly_price?: string | number | null; currency?: string | null; plan?: string | null } | null;
+}
+
+function normalizeBundleMoney(value: unknown): string {
+ if (typeof value === 'number' && Number.isFinite(value)) {
+   return value.toFixed(2);
+ }
+ if (typeof value === 'string') {
+   const trimmed = value.trim();
+   if (!trimmed) return '';
+   const normalized = Number(trimmed);
+   if (Number.isFinite(normalized)) return normalized.toFixed(2);
+   return trimmed;
+ }
+ return '';
+}
+
+function normalizeBundleText(value: unknown, fallback: string): string {
+ if (typeof value === 'string') {
+   const trimmed = value.trim();
+   return trimmed || fallback;
+ }
+ if (typeof value === 'number' && Number.isFinite(value)) {
+   return String(value);
+ }
+ return fallback;
 }
 
 export function financeAccessFromEntitlement(value:unknown, trialReady:boolean, now=Date.now()):FinanceAccess {
@@ -36,9 +61,9 @@ export function assertFinanceFeature(access:FinanceAccess,feature:FinanceTrialFe
 
 export function resolveMyopsBundlePrice(entitlement: MyopsBundleEntitlement | null | undefined): { monthlyPrice: string; currency: string; app: string; plan: string } {
  const bundle = entitlement?.bundle as Record<string, unknown> | undefined;
- const monthlyPrice = typeof bundle?.monthly_price === 'string' && bundle.monthly_price.trim() ? bundle.monthly_price : '';
- const currency = typeof bundle?.currency === 'string' && bundle.currency.trim() ? bundle.currency : 'MYR';
- const app = typeof bundle?.app === 'string' && bundle.app.trim() ? bundle.app : 'OpsFinance';
- const plan = typeof bundle?.plan === 'string' && bundle.plan.trim() ? bundle.plan : 'MANAGED_IN_MYOPS';
+ const monthlyPrice = normalizeBundleMoney(bundle?.monthly_price);
+ const currency = normalizeBundleText(bundle?.currency, 'MYR').toUpperCase();
+ const app = normalizeBundleText(bundle?.app, 'OpsFinance');
+ const plan = normalizeBundleText(bundle?.plan, 'MANAGED_IN_MYOPS').toUpperCase();
  return { monthlyPrice, currency, app, plan };
 }

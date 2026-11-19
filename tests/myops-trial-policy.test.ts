@@ -34,6 +34,20 @@ it('surfaces the approved MYOPS bundle pricing for paid OpsFinance access', () =
  expect(plan).toBe('ALL_APPS');
 });
 
+it('normalizes signed bundle payloads from MYOPS even when the grant uses numeric values or case variants', () => {
+ const { monthlyPrice, currency, app, plan } = resolveMyopsBundlePrice({
+   entitled: true,
+   session_active: true,
+   access_mode: 'paid',
+   bundle: { app: 'opsfinance', plan: 'all_apps', monthly_price: 79, currency: 'myr' },
+ });
+
+ expect(monthlyPrice).toBe('79.00');
+ expect(currency).toBe('MYR');
+ expect(app).toBe('opsfinance');
+ expect(plan).toBe('ALL_APPS');
+});
+
 it('does not invent a local price when central metadata is absent',()=>{
  expect(resolveMyopsBundlePrice(null)).toMatchObject({monthlyPrice:'',plan:'MANAGED_IN_MYOPS'});
 });
