@@ -30,3 +30,14 @@ it('mobile navigation closes when a route is selected', () => {
   expect(toggle.getAttribute('aria-expanded')).toBe('false');
   expect(document.getElementById('opsfinance-mobile-nav')).toBeNull();
 });
+
+it('uses a MYOPS back-navigation control instead of a local logout in SSO mode', () => {
+  vi.stubEnv('NEXT_PUBLIC_MYOPS_SSO_ENABLED', 'true');
+  const fetchSpy = vi.fn();
+  vi.stubGlobal('fetch', fetchSpy);
+
+  render(<AuthenticatedAppShell businessName="Registered company"><div>Financial records</div></AuthenticatedAppShell>);
+
+  expect(screen.getByRole('button', { name: 'Back to MYOPS' })).toBeTruthy();
+  expect(fetchSpy).not.toHaveBeenCalled();
+});

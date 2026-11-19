@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 
-import { clearSupabaseSessionStorage, navigateToLogin } from '../lib/auth/navigation';
+import { clearSupabaseSessionStorage, getMyopsHomeUrl, navigateToLogin } from '../lib/auth/navigation';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
 export function LogoutButton() {
@@ -10,8 +10,7 @@ export function LogoutButton() {
 
   const handleLogout = async () => {
     if (process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED === 'true') {
-      const response=await fetch('/api/myops/logout',{method:'POST',credentials:'same-origin'});
-      if(response.ok) { const body=await response.json(); window.location.replace(body.next); }
+      window.location.assign(getMyopsHomeUrl());
       return;
     }
 
@@ -38,7 +37,7 @@ export function LogoutButton() {
 
   return (
     <button type="button" onClick={handleLogout} style={{ marginTop: '0.75rem' }}>
-      Sign out
+      {process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED === 'true' ? 'Back to MYOPS' : 'Sign out'}
     </button>
   );
 }

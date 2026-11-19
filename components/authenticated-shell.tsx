@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { LanguageSwitcher } from './language-switcher';
 import { trackUserActivity } from '../lib/auth/user-activity';
 
-import { isPreviewAuthBypassEnabled } from '../lib/auth/navigation';
+import { getMyopsHomeUrl, isPreviewAuthBypassEnabled } from '../lib/auth/navigation';
 import { getStoredLocale, getTranslation, getNavigationGroups, translations } from '../lib/i18n';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
@@ -95,8 +95,7 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
 
   const signOut = async () => {
     if (process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED === 'true') {
-      const response=await fetch('/api/myops/logout',{method:'POST',credentials:'same-origin'});
-      if(response.ok) { const body=await response.json(); window.location.replace(body.next); }
+      window.location.assign(getMyopsHomeUrl());
       return;
     }
 
