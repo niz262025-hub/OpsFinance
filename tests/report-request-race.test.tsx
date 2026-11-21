@@ -1,0 +1,25 @@
+import React from 'react';
+import {afterEach,expect,it,vi} from 'vitest';
+import {cleanup,render,screen,act,fireEvent} from '@testing-library/react';
+const mocks=vi.hoisted(()=>({load:vi.fn()}));
+vi.mock('../lib/report-source',()=>({loadReportRows:mocks.load}));
+vi.mock('../lib/auth/navigation',()=>({isPreviewAuthBypassEnabled:()=>false}));
+vi.mock('../lib/supabase/client',()=>({getSupabaseBrowserClient:()=>({})}));
+import {ReportsWorkflow} from '../components/reports-workflow';
+import {currentMonth} from '../lib/calendar';
+afterEach(()=>{cleanup();vi.clearAllMocks();});
+const fixture=(business:string)=>({accounts:[{id:`${business}-cash`,business_id:business,code:'1100',name:`${business} Cash`,account_type:'ASSET',normal_balance:'DEBIT',is_active:true}],journals:[]});
+it('ignores a late prior-business response and derives changed date filters without another database read',async()=>{
+ let finishA!:(value:unknown)=>void;
+ mocks.load.mockImplementation((_client:unknown,business:string)=>business==='A'?new Promise(resolve=>{finishA=resolve;}):Promise.resolve(fixture('B')));
+ const view=render(<ReportsWorkflow businessId="A" defaultReport="statement"/>);
+ view.rerender(<ReportsWorkflow businessId="B" defaultReport="statement"/>);
+ await screen.findByRole('option',{name:'B Cash'});
+ await act(async()=>finishA(fixture('A')));
+ expect(screen.queryByRole('option',{name:'A Cash'})).toBeNull();
+ expect((screen.getByLabelText('Start date') as HTMLInputElement).value).toBe(currentMonth().from);
+ fireEvent.change(screen.getByLabelText('End date'),{target:{value:'2020-01-01'}});
+ expect(screen.getByRole('alert').textContent).toMatch(/start date must not be after/);
+ expect(screen.getByRole('button',{name:'Export CSV'}).hasAttribute('disabled')).toBe(true);
+ expect(mocks.load).toHaveBeenCalledTimes(2);
+});

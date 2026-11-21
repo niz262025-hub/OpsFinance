@@ -1,5 +1,7 @@
 'use client';
 
+import {useFinanceLocale} from './use-finance-locale';
+
 import React, { useEffect, useMemo, useState } from 'react';
 
 type UploadWorkflowProps = {
@@ -36,6 +38,7 @@ type UploadRow = {
 };
 
 export function UploadWorkflow({ businessId, businessContextError }: UploadWorkflowProps) {
+  const {t:w}=useFinanceLocale();
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [financialAccounts, setFinancialAccounts] = useState<FinancialAccountOption[]>([]);
   const [selectedFinancialAccountId, setSelectedFinancialAccountId] = useState('');
@@ -86,8 +89,8 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
     return (
       <main className="opsfinance-workflow-panel" style={{ padding: '2rem 1rem' }}>
         <div className="opsfinance-surface" style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem' }}>
-          <h1 style={{ marginTop: 0 }}>Upload &amp; Convert</h1>
-          <p style={{ marginBottom: 0 }}>{businessContextError ?? 'No active business is available for upload processing.'}</p>
+          <h1 style={{ marginTop: 0 }}>{w("Upload & Convert")}</h1>
+          <p style={{ marginBottom: 0 }}>{businessContextError ?? w("No active business is available for upload processing.")}</p>
         </div>
       </main>
     );
@@ -211,31 +214,27 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
     <main style={{ minHeight: '100vh', background: '#f8fafc', color: '#0f172a', fontFamily: 'Arial, sans-serif', padding: '2rem 1rem' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gap: '1rem' }}>
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.5rem' }}>
-          <h1 style={{ marginTop: 0 }}>Upload &amp; Convert</h1>
-          <p style={{ marginBottom: 0 }}>Import a CSV or TXT bank statement, review it, then approve posting. PDF, image and Excel extraction is not available yet.</p>
+          <h1 style={{ marginTop: 0 }}>{w("Upload & Convert")}</h1>
+          <p style={{ marginBottom: 0 }}>{w("Import a CSV or TXT bank statement, review it, then approve posting. PDF, image and Excel extraction is not available yet.")}</p>
         </div>
 
         <section style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1rem', display: 'grid', gap: '0.8rem' }}>
-          <label style={{ display: 'grid', gap: '0.25rem' }}>
-            Bank or financial account
-            <select disabled={isLoading} value={selectedFinancialAccountId} onChange={(event) => {
+          <label style={{ display: 'grid', gap: '0.25rem' }}> {w("Bank or financial account")} <select disabled={isLoading} value={selectedFinancialAccountId} onChange={(event) => {
               setSelectedFinancialAccountId(event.target.value);
               setStatementId(null);
               setRows([]);
               setSuccess(null);
               setError(null);
             }}>
-              <option value="">Select the account this statement belongs to</option>
+              <option value="">{w("Select the account this statement belongs to")}</option>
               {financialAccounts.map((account) => (
                 <option key={account.id} value={account.id}>{account.account_code} - {account.name}</option>
               ))}
             </select>
           </label>
-          <p style={{ margin: 0 }}>The statement must include its full account number in an Account Number column or an Account Number metadata line. Wrong, missing or masked account numbers cancel the import.</p>
-          <p style={{ margin: 0 }}>Only active financial accounts with a ledger mapping are available. Create or update them in Financial Accounts.</p>
-          <label style={{ display: 'grid', gap: '0.25rem' }}>
-            Upload a bank statement
-            <input
+          <p style={{ margin: 0 }}>{w("The statement must include its full account number in an Account Number column or an Account Number metadata line. Wrong, missing or masked account numbers cancel the import.")}</p>
+          <p style={{ margin: 0 }}>{w("Only active financial accounts with a ledger mapping are available. Create or update them in Financial Accounts.")}</p>
+          <label style={{ display: 'grid', gap: '0.25rem' }}> {w("Upload a bank statement")} <input
               type="file"
               disabled={isLoading || !selectedFinancialAccountId}
               accept=".csv,.txt,text/csv,text/plain"
@@ -248,9 +247,7 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
             />
           </label>
 
-          <label style={{ display: 'grid', gap: '0.25rem' }}>
-            Preview content
-            <textarea
+          <label style={{ display: 'grid', gap: '0.25rem' }}> {w("Preview content")} <textarea
               disabled={isLoading}
               value={sourceText}
               onChange={(event) => { setSourceText(event.target.value); setStatementId(null); setRows([]); setSuccess(null); }}
@@ -260,10 +257,8 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
             />
           </label>
 
-          <label style={{ display: 'grid', gap: '0.25rem' }}>
-            Posting account
-            <select disabled={isLoading} value={selectedAccountId} onChange={(event) => setSelectedAccountId(event.target.value)}>
-              <option value="">Select the accounting category</option>
+          <label style={{ display: 'grid', gap: '0.25rem' }}> {w("Posting account")} <select disabled={isLoading} value={selectedAccountId} onChange={(event) => setSelectedAccountId(event.target.value)}>
+              <option value="">{w("Select the accounting category")}</option>
               {accounts.map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.code} - {account.name}
@@ -274,31 +269,31 @@ export function UploadWorkflow({ businessId, businessContextError }: UploadWorkf
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
             <button type="button" onClick={handleParseReview} disabled={isLoading || !selectedFinancialAccountId || !sourceText.trim()} style={{ background: '#0f172a', color: '#fff', border: 'none', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}>
-              {isLoading ? 'Processing…' : 'Parse & review'}
+              {isLoading ? w("Processing\u2026") : w("Parse & review")}
             </button>
             <button type="button" onClick={handleApprove} disabled={isLoading || !statementId || !selectedAccountId} style={{ background: '#0f172a', color: '#fff', border: 'none', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}>
-              {isLoading ? 'Processing…' : 'Approve and post'}
+              {isLoading ? w("Processing\u2026") : w("Approve and post")}
             </button>
           </div>
 
-          {showImportError && error ? <div role="alertdialog" aria-modal="true" aria-labelledby="import-error-title" style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(15,23,42,0.5)',display:'grid',placeItems:'center'}}><div style={{background:'white',padding:'1.5rem',borderRadius:12,maxWidth:480}}><h2 id="import-error-title">Import cancelled</h2><p>{error}</p><button autoFocus onClick={() => setShowImportError(false)}>Close</button></div></div> : null}
-          {error && !showImportError ? <div role="alert" style={{ color: '#b91c1c', fontWeight: 600 }}>{error}</div> : null}
-          {success ? <div style={{ color: '#166534', fontWeight: 600 }}>{success}</div> : null}
+          {showImportError && error ? <div role="alertdialog" aria-modal="true" aria-labelledby="import-error-title" style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(15,23,42,0.5)',display:'grid',placeItems:'center'}}><div style={{background:'white',padding:'1.5rem',borderRadius:12,maxWidth:480}}><h2 id="import-error-title">{w("Import cancelled")}</h2><p>{w(error)}</p><button autoFocus onClick={() => setShowImportError(false)}>{w("Close")}</button></div></div> : null}
+          {error && !showImportError ? <div role="alert" style={{ color: '#b91c1c', fontWeight: 600 }}>{w(error)}</div> : null}
+          {success ? <div style={{ color: '#166534', fontWeight: 600 }}>{w(success)}</div> : null}
 
           {rows.length ? (
             <div style={{ overflowX: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                <strong>Imported rows</strong>
-                <span>{previewSummary.total} rows · total {previewSummary.totalAmount}</span>
+                <strong>{w("Imported rows")}</strong>
+                <span>{previewSummary.total} {w("rows · total")} {previewSummary.totalAmount}</span>
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.95rem' }}>
                 <thead>
                   <tr>
-                    <th style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', padding: '0.5rem' }}>Date</th>
-                    <th style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', padding: '0.5rem' }}>Description</th>
-                    <th style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', padding: '0.5rem' }}>Reference</th>
-                    <th style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', padding: '0.5rem' }}>Amount</th>
-                    <th style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', padding: '0.5rem' }}>Direction</th>
+                    <th style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', padding: '0.5rem' }}>{w("Date")}</th>
+                    <th style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', padding: '0.5rem' }}>{w("Description")}</th>
+                    <th style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', padding: '0.5rem' }}>{w("Reference")}</th>
+                    <th style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', padding: '0.5rem' }}>{w("Amount")}</th>
+                    <th style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', padding: '0.5rem' }}>{w("Direction")}</th>
                   </tr>
                 </thead>
                 <tbody>

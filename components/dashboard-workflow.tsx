@@ -1,5 +1,7 @@
 'use client';
 
+import {useFinanceLocale} from './use-finance-locale';
+
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 
@@ -13,13 +15,7 @@ type DashboardWorkflowProps = {
   businessName?: string;
 };
 
-const formatMoney = (value: string | number | undefined) => {
-  const numeric = Number(value ?? 0);
-  if (!Number.isFinite(numeric)) {
-    return 'RM0.00';
-  }
-  return `RM${numeric.toFixed(2)}`;
-};
+
 
 const quickActions = [
   { href: '/transactions/money-in', label: 'Money In' },
@@ -31,6 +27,7 @@ const quickActions = [
 ];
 
 function DashboardWelcome({ businessName }: { businessName?: string }) {
+  const {t:w,locale}=useFinanceLocale();
   const [clock, setClock] = useState<Date | null>(null);
   useEffect(() => {
     const update = () => setClock(new Date());
@@ -41,15 +38,16 @@ function DashboardWelcome({ businessName }: { businessName?: string }) {
   const hour = clock?.getHours() ?? 0;
   const greeting = clock ? (hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Night') : 'Welcome';
   return <header className="opsfinance-dashboard-header">
-    <div><p className="opsfinance-section-kicker">MYOPS</p><h1>{greeting}{businessName ? `, ${businessName}` : ''}</h1></div>
+    <div><p className="opsfinance-section-kicker">MYOPS</p><h1>{w(greeting)}{businessName ? `, ${businessName}` : ''}</h1></div>
     <time className="opsfinance-dashboard-clock" dateTime={clock?.toISOString()}>
-      {clock?.toLocaleDateString('en-MY', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
-      <strong>{clock?.toLocaleTimeString('en-MY')}</strong>
+      {clock?.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
+      <strong>{clock?.toLocaleTimeString(locale)}</strong>
     </time>
   </header>;
 }
 
 export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflowProps) {
+  const {t:w,formatMoney}=useFinanceLocale();
   const [summary, setSummary] = useState<Array<{ label: string; value: string }>>([]);
   const [balances, setBalances] = useState<Array<{ id: string; name: string; type: string; balance: string }>>([]);
   const [recentTransactions, setRecentTransactions] = useState<Array<{ id: string; description: string; status: string; referenceNo?: string; amount: string; date: string }>>([]);
@@ -148,10 +146,10 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
           .filter((account) => Number(account.balance) !== 0 || account.type === 'ASSET' || account.type === 'LIABILITY' || account.type === 'EQUITY');
 
         setSummary([
-          { label: 'Total Cash', value: cashFlow.closingCash },
-          { label: 'Sales / Revenue', value: pnl.revenueTotal },
-          { label: 'Expenses', value: pnl.expensesTotal },
-          { label: 'Net Profit', value: pnl.netProfit },
+          { label: "Total Cash", value: cashFlow.closingCash },
+          { label: "Sales / Revenue", value: pnl.revenueTotal },
+          { label: "Expenses", value: pnl.expensesTotal },
+          { label: "Net Profit", value: pnl.netProfit },
         ]);
         setBalances(balancesData);
         setRecentTransactions(
@@ -181,22 +179,22 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
           <header className="opsfinance-dashboard-header">
             <div>
               <p className="opsfinance-section-kicker">OpsFinance</p>
-              <h1>OpsFinance Dashboard</h1>
+              <h1>{w("OpsFinance Dashboard")}</h1>
             </div>
           </header>
-          <p style={{ margin: '0.5rem 0 1rem', color: 'var(--muted)' }}>Set up your business to start using OpsFinance. Your records will be kept in a separate business workspace.</p>
+          <p style={{ margin: '0.5rem 0 1rem', color: 'var(--muted)' }}>{w("Set up your business to start using OpsFinance. Your records will be kept in a separate business workspace.")}</p>
           <BusinessOnboarding />
           <div className="opsfinance-kpi-grid" style={{ marginTop: '1rem' }}>
-            {['Total Cash', 'Sales / Revenue', 'Expenses', 'Net Profit'].map((label) => (
+            {[w("Total Cash"), w("Sales / Revenue"), w("Expenses"), w("Net Profit")].map((label) => (
               <div key={label} className="opsfinance-stat-card">
-                <div className="label">{label}</div>
+                <div className="label">{w(label)}</div>
                 <div className="value">{formatMoney('0')}</div>
               </div>
             ))}
           </div>
           <div style={{ marginTop: '1rem' }}>
-            <h2 className="opsfinance-panel-header">Financial Account Balances</h2>
-            <p style={{ margin: 0, color: 'var(--muted)' }}>No account balances available.</p>
+            <h2 className="opsfinance-panel-header">{w("Financial Account Balances")}</h2>
+            <p style={{ margin: 0, color: 'var(--muted)' }}>{w("No account balances available.")}</p>
           </div>
         </div>
       </main>
@@ -207,8 +205,8 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
     return (
       <main className="opsfinance-dashboard">
         <div role="alert" className="opsfinance-panel" style={{ maxWidth: 960, margin: '0 auto', background: '#fff1f2', borderColor: '#fecdd3' }}>
-          <h1 style={{ marginTop: 0 }}>Dashboard error</h1>
-          <p style={{ marginBottom: 0 }}>{error}</p>
+          <h1 style={{ marginTop: 0 }}>{w("Dashboard error")}</h1>
+          <p style={{ marginBottom: 0 }}>{w(error)}</p>
         </div>
       </main>
     );
@@ -218,15 +216,15 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
     <main className="opsfinance-dashboard">
       <DashboardWelcome businessName={businessName} />
 
-      {loading ? <div className="opsfinance-panel" role="status">Loading your financial summary…</div> : null}
+      {loading ? <div className="opsfinance-panel" role="status">{w("Loading your financial summary…")}</div> : null}
 
       <section className="opsfinance-panel" aria-labelledby="dashboard-quick-actions">
-        <h2 id="dashboard-quick-actions" className="opsfinance-panel-header">Quick Actions</h2>
-        <nav aria-label="Quick Actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <h2 id="dashboard-quick-actions" className="opsfinance-panel-header">{w("Quick Actions")}</h2>
+        <nav aria-label={w("Quick Actions")} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
           {quickActions.map(action => (
             <Link key={action.href} href={action.href} prefetch={false}
               style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 44, maxWidth: '100%', padding: '0.65rem 1rem', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--brand-rose)', color: 'var(--text)', fontWeight: 700, overflowWrap: 'anywhere', textAlign: 'center' }}>
-              {action.label}
+              {w(action.label)}
             </Link>
           ))}
         </nav>
@@ -235,7 +233,7 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
       <section className="opsfinance-kpi-grid">
         {summary.map((card) => (
           <div key={card.label} className="opsfinance-stat-card">
-            <div className="label">{card.label}</div>
+            <div className="label">{w(card.label)}</div>
             <div className="value">{formatMoney(card.value)}</div>
           </div>
         ))}
@@ -243,8 +241,8 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
 
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '1rem' }}>
         <div className="opsfinance-panel">
-          <h2 className="opsfinance-panel-header">Financial Account Balances</h2>
-          {balances.length === 0 ? <div style={{ color: 'var(--muted)' }}>No account balances available.</div> : (
+          <h2 className="opsfinance-panel-header">{w("Financial Account Balances")}</h2>
+          {balances.length === 0 ? <div style={{ color: 'var(--muted)' }}>{w("No account balances available.")}</div> : (
             <div className="opsfinance-balance-list">
               {balances.map((account) => (
                 <div key={account.id} className="opsfinance-balance-item">
@@ -260,8 +258,8 @@ export function DashboardWorkflow({ businessId, businessName }: DashboardWorkflo
         </div>
 
         <div className="opsfinance-panel">
-          <h2 className="opsfinance-panel-header">Recent Posted Transactions</h2>
-          {recentTransactions.length === 0 ? <div style={{ color: 'var(--muted)' }}>No posted activity yet.</div> : (
+          <h2 className="opsfinance-panel-header">{w("Recent Posted Transactions")}</h2>
+          {recentTransactions.length === 0 ? <div style={{ color: 'var(--muted)' }}>{w("No posted activity yet.")}</div> : (
             <div className="opsfinance-transaction-list">
               {recentTransactions.map((transaction) => (
                 <div key={transaction.id} className="opsfinance-txn-item">

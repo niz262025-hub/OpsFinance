@@ -46,3 +46,13 @@ it('binds atomic statement imports to the verified server identity and safely re
  admin.rpc.mockResolvedValue({error:{message:'Finance trial usage limit reached'}});
  await expect(client.myopsTrialImport({business_id:'b',uploaded_by:'u'},[],'hash')).rejects.toThrow('2 files');
 });
+it('permits the authenticated atomic bank/ledger RPC only for the bound business and zero opening balance',async()=>{
+ const rpc=vi.fn().mockResolvedValue({data:{financialAccount:{id:'bank',account_id:'ledger'},autoCreatedLedger:true},error:null});
+ const admin={rpc:vi.fn()};const client={rpc,from:vi.fn()};
+ installFinanceTrialClient(client,admin,access,'u','b');
+ const payload={p_business_id:'b',p_type:'BANK',p_name:'Trial Bank',p_opening_balance:'0.00'};
+ expect((await client.rpc('create_financial_account_with_ledger',payload)).data.autoCreatedLedger).toBe(true);
+ expect(rpc).toHaveBeenCalledWith('create_financial_account_with_ledger',{...payload,p_opening_balance:0});
+ for(const p of [{...payload,p_business_id:'other'},...['10.00','bad',-1].map(p_opening_balance=>({...payload,p_opening_balance}))])await expect(client.rpc('create_financial_account_with_ledger',p)).rejects.toThrow();
+ expect(rpc).toHaveBeenCalledTimes(1);expect(admin.rpc).not.toHaveBeenCalled();
+});

@@ -1,5 +1,7 @@
 'use client';
 
+import {useFinanceLocale} from './use-finance-locale';
+
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 type ReconciliationWorkflowProps = {
@@ -30,6 +32,7 @@ type BookTransaction = {
 };
 
 export function ReconciliationWorkflow({ businessId, businessContextError }: ReconciliationWorkflowProps) {
+  const {t:w}=useFinanceLocale();
   const [openingBalance, setOpeningBalance] = useState<string | null>(null);
   const [matches, setMatches] = useState<Array<{bank_transaction_id:string;matched_amount:string}>>([]);
   const [statementId, setStatementId] = useState<string | null>(null);
@@ -110,8 +113,8 @@ export function ReconciliationWorkflow({ businessId, businessContextError }: Rec
     return (
       <main className="opsfinance-workflow-panel" style={{ padding: '2rem 1rem' }}>
         <div className="opsfinance-surface" style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem' }}>
-          <h1 style={{ marginTop: 0 }}>Bank Reconciliation</h1>
-          <p style={{ marginBottom: 0 }}>{businessContextError ?? 'No active business is available for reconciliation.'}</p>
+          <h1 style={{ marginTop: 0 }}>{w("Bank Reconciliation")}</h1>
+          <p style={{ marginBottom: 0 }}>{businessContextError ?? w("No active business is available for reconciliation.")}</p>
         </div>
       </main>
     );
@@ -189,25 +192,23 @@ export function ReconciliationWorkflow({ businessId, businessContextError }: Rec
     <main style={{ minHeight: '100vh', background: '#f8fafc', color: '#0f172a', fontFamily: 'Arial, sans-serif', padding: '2rem 1rem' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gap: '1rem' }}>
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1.5rem' }}>
-          <h1 style={{ marginTop: 0 }}>Bank Reconciliation</h1>
-          <p style={{ marginBottom: 0 }}>Match bank statement rows to actual posted book transactions and complete the reconciliation server-side.</p>
+          <h1 style={{ marginTop: 0 }}>{w("Bank Reconciliation")}</h1>
+          <p style={{ marginBottom: 0 }}>{w("Match bank statement rows to actual posted book transactions and complete the reconciliation server-side.")}</p>
         </div>
 
         <section style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 18, padding: '1rem', display: 'grid', gap: '0.8rem' }}>
           <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.75rem', background: '#f8fafc' }}>
-            <strong style={{ display: 'block', marginBottom: '0.5rem' }}>Statement summary</strong>
+            <strong style={{ display: 'block', marginBottom: '0.5rem' }}>{w("Statement summary")}</strong>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
-              <div>Opening balance<br /><span>{statementSummary.openingBalance}</span></div>
-              <div>Statement total<br /><span>{statementSummary.statementTotal}</span></div>
-              <div>Business posted total<br /><span>{statementSummary.postedTotal}</span></div>
-              <div>Outstanding<br /><span>{statementSummary.outstanding}</span></div>
+              <div>{w("Opening balance")}<br /><span>{statementSummary.openingBalance}</span></div>
+              <div>{w("Statement total")}<br /><span>{statementSummary.statementTotal}</span></div>
+              <div>{w("Business posted total")}<br /><span>{statementSummary.postedTotal}</span></div>
+              <div>{w("Outstanding")}<br /><span>{statementSummary.outstanding}</span></div>
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.8rem' }}>
-            <label style={{ display: 'grid', gap: '0.25rem' }}>
-              Bank statement row
-              <select value={selectedBankTransactionId} onChange={(event) => {
+            <label style={{ display: 'grid', gap: '0.25rem' }}> {w("Bank statement row")} <select value={selectedBankTransactionId} onChange={(event) => {
                 const nextValue = event.target.value;
                 setSelectedBankTransactionId(nextValue);
                 const row = bankTransactions.find((item) => item.id === nextValue);
@@ -221,40 +222,32 @@ export function ReconciliationWorkflow({ businessId, businessContextError }: Rec
               </select>
             </label>
 
-            <label style={{ display: 'grid', gap: '0.25rem' }}>
-              Posting / book transaction
-              <select value={selectedBookTransactionId} onChange={(event) => setSelectedBookTransactionId(event.target.value)}>
+            <label style={{ display: 'grid', gap: '0.25rem' }}> {w("Posting / book transaction")} <select value={selectedBookTransactionId} onChange={(event) => setSelectedBookTransactionId(event.target.value)}>
                 {bookTransactions.map((row) => (
                   <option key={row.id} value={row.id}>{row.reference_no || row.transaction_no || row.description} - {row.amount}</option>
                 ))}
               </select>
             </label>
 
-            <label style={{ display: 'grid', gap: '0.25rem' }}>
-              Matched amount
-              <input value={matchedAmount} onChange={(event) => setMatchedAmount(event.target.value)} />
+            <label style={{ display: 'grid', gap: '0.25rem' }}> {w("Matched amount")} <input value={matchedAmount} onChange={(event) => setMatchedAmount(event.target.value)} />
             </label>
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
             <button type="button" onClick={handleMatch} disabled={isLoading || !selectedBankTransactionId || !selectedBookTransactionId} style={{ background: '#0f172a', color: '#fff', border: 'none', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}>
-              {isLoading ? 'Processing…' : 'Create match'}
+              {isLoading ? w("Processing\u2026") : w("Create match")}
             </button>
-            <button type="button" onClick={handleComplete} disabled={isLoading || !statementId || bankTransactions.length === 0 || unmatchedRows.length > 0} style={{ background: '#e2e8f0', color: '#0f172a', border: 'none', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}>
-              Complete reconciliation
-            </button>
-            <button type="button" onClick={loadSnapshot} style={{ background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}>
-              Refresh
-            </button>
+            <button type="button" onClick={handleComplete} disabled={isLoading || !statementId || bankTransactions.length === 0 || unmatchedRows.length > 0} style={{ background: '#e2e8f0', color: '#0f172a', border: 'none', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}> {w("Complete reconciliation")} </button>
+            <button type="button" onClick={loadSnapshot} style={{ background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: 10, padding: '0.7rem 1rem', fontWeight: 700, cursor: 'pointer' }}> {w("Refresh")} </button>
           </div>
 
-          {error ? <div style={{ color: '#b91c1c', fontWeight: 600 }}>{error}</div> : null}
+          {error ? <div style={{ color: '#b91c1c', fontWeight: 600 }}>{w(error)}</div> : null}
           {status ? <div style={{ color: '#166534', fontWeight: 600 }}>{status}</div> : null}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
             {bankTransactions.length ? (
               <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.75rem' }}>
-                <strong>Bank statement rows</strong>
+                <strong>{w("Bank statement rows")}</strong>
                 <ul style={{ margin: '0.75rem 0 0', paddingLeft: '1.2rem' }}>
                   {bankTransactions.map((row) => (
                     <li key={row.id}>
@@ -266,7 +259,7 @@ export function ReconciliationWorkflow({ businessId, businessContextError }: Rec
             ) : null}
             {bookTransactions.length ? (
               <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.75rem' }}>
-                <strong>Posted transactions</strong>
+                <strong>{w("Posted transactions")}</strong>
                 <ul style={{ margin: '0.75rem 0 0', paddingLeft: '1.2rem' }}>
                   {bookTransactions.map((row) => (
                     <li key={row.id}>

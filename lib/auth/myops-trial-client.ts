@@ -12,6 +12,13 @@ export function installFinanceTrialClient(client:any,admin:any,access:FinanceAcc
  const originalRpc=client.rpc.bind(client), originalFrom=client.from.bind(client);
  client.rpc=async(name:string,payload:Record<string,unknown>={})=>{
   if(name==='get_accounting_idempotency')return originalRpc(name,payload);
+  if(name==='create_financial_account_with_ledger') {
+   if(payload.p_business_id!==businessId)throw new Error('Business access denied.');
+   if(!Number.isFinite(Number(payload.p_opening_balance??0))||Number(payload.p_opening_balance??0)!==0)throw new Error('Start trial bank accounts with a zero opening balance. Add balances through trial transactions.');
+   // The authenticated RPC verifies auth.uid()/owner-admin membership and creates the
+   // account and ledger atomically. Zero balance creates no posting or usage unit.
+   return originalRpc(name,{...payload,p_business_id:businessId,p_opening_balance:0});
+  }
   if(name!=='post_accounting_transaction_atomic')throw new Error('This operation is preview only during your trial. Upgrade in MYOPS.');
   if(payload.p_business_id!==businessId)throw new Error('Business access denied.');
   const result=await admin.rpc('opsfinance_trial_post_transaction',{

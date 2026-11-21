@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 
+import {useFinanceLocale} from './use-finance-locale';
 import { LanguageSwitcher } from './language-switcher';
 import { trackUserActivity } from '../lib/auth/user-activity';
 
 import { isPreviewAuthBypassEnabled } from '../lib/auth/navigation';
-import { getStoredLocale, getTranslation, getNavigationGroups, translations } from '../lib/i18n';
+import { getTranslation, getNavigationGroups } from '../lib/i18n';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
 type AuthenticatedAppShellProps = {
@@ -58,14 +59,11 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [idleExpired, setIdleExpired] = useState(false);
-  const [locale, setLocale] = useState<string>(getStoredLocale());
-  const t = translations[locale as keyof typeof translations] ?? translations.en;
+  const {locale,setLocale}=useFinanceLocale();
 
   useEffect(() => {
-    const nextLocale = getStoredLocale();
-    setLocale(nextLocale);
-    document.documentElement.lang = nextLocale;
-  }, [pathname]);
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth > 900) {

@@ -2,7 +2,7 @@
 
 import React, { type ChangeEvent, useEffect, useState } from 'react';
 
-import { getStoredLocale, localeLabels, persistLocale, resolveLocale, type Locale } from '../lib/i18n';
+import { getStoredLocale, getTranslation, localeLabels, persistLocale, resolveLocale, type Locale } from '../lib/i18n';
 
 export function LanguageSwitcher({ value, onChange }: { value?: Locale; onChange?: (locale: Locale) => void }) {
   const [locale, setLocale] = useState<Locale>(value ?? getStoredLocale());
@@ -21,9 +21,9 @@ export function LanguageSwitcher({ value, onChange }: { value?: Locale; onChange
   };
 
   return (
-    <label className="opsfinance-language-picker" aria-label="Select language">
-      <span className="sr-only">Language</span>
-      <select value={locale} onChange={handleChange} aria-label="Select language">
+    <label className="opsfinance-language-picker" aria-label={getTranslation(locale,'languageSelector')}>
+      <span className="sr-only">{getTranslation(locale,'language')}</span>
+      <select value={locale} onChange={handleChange} aria-label={getTranslation(locale,'languageSelector')}>
         {(['en', 'ms', 'zh-CN', 'ta'] as const).map((option) => (
           <option key={option} value={option}>
             {localeLabels[option]}
