@@ -16,7 +16,12 @@ export async function POST(request:NextRequest) {
     const response=NextResponse.json({ok:true},{headers});
     response.cookies.set(MYOPS_COOKIE,sealSession(session,config.secret),{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:Math.max(0,Math.floor((session.expiresAt-Date.now())/1000))});
     return response;
-  } catch {
+  } catch (error) {
+    if (process.env.VERCEL_ENV === 'preview') {
+      const reason = error instanceof Error ? error.message : '';
+      const allowed = new Set(['SSO is not enabled for this deployment.','Invalid SSO origin.','SSO configuration is incomplete.','SSO identity bridge is not configured.','No authorized identity mapping.','Mapped identity is unavailable.','Identity exchange failed.','Business access denied.','MYOPS access could not be verified.','MYOPS access denied.','Invalid MYOPS grant.']);
+      console.warn('myops_launch_rejected', allowed.has(reason) ? reason : 'unclassified');
+    }
     return NextResponse.json({error:'MYOPS launch could not be verified.'},{status:403,headers});
   }
 }

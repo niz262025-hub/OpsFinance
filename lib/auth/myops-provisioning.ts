@@ -20,7 +20,7 @@ export async function provisionFinanceIdentity(admin:any,userRef:string,profile:
  // search by user email or attach a pre-existing unrelated Supabase identity.
  let lookup=await admin.auth.admin.getUserById(id);
  if(!lookup.data?.user){
-  const created=await admin.auth.admin.createUser({id,email,email_confirm:true,app_metadata:{myops_user_ref:userRef,myops_bridge:'opsfinance-v1'}});
+  const created=await admin.auth.admin.createUser({id,email,email_confirm:true,user_metadata:{full_name:name},app_metadata:{myops_user_ref:userRef,myops_bridge:'opsfinance-v1'}});
   lookup=created.error?await admin.auth.admin.getUserById(id):created;
  }
  const user=lookup.data?.user;

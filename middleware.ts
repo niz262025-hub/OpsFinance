@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 
 import { MYOPS_COOKIE, openSession, ssoConfig, ssoEnabled } from './lib/auth/myops-session';
 import { checkMyopsEntitlement } from './lib/auth/myops-transport';
+import { measureMyopsPhase } from './lib/auth/myops-performance';
 
 import { isPreviewAuthBypassEnabled } from './lib/auth/navigation';
 
@@ -36,7 +37,7 @@ export async function middleware(request: NextRequest) {
         const {secret,transport}=ssoConfig();
         const session=openSession(request.cookies.get(MYOPS_COOKIE)?.value,secret);
         if(!session)throw new Error();
-        await checkMyopsEntitlement(transport,session.sessionId,false);
+        await measureMyopsPhase('middleware_entitlement', () => checkMyopsEntitlement(transport,session.sessionId,false));
       }catch{
         if(protectedApi)return NextResponse.json({error:'MYOPS authentication required.'},{status:401,headers:{'Cache-Control':'no-store'}});
         return NextResponse.redirect(new URL('/login',process.env.MYOPS_ORIGIN??'https://www.myops.com.my'));

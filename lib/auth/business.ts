@@ -1,3 +1,5 @@
+import { measureMyopsPhase } from './myops-performance';
+
 export type BusinessRecord = {
   id: string;
   name: string;
@@ -91,10 +93,10 @@ export async function resolveCurrentBusinessForUser(
     return { business: null, memberships: [], created: false, error: 'Authenticated user required.', context: { userId: '', businessId: '', state: 'AUTH_REQUIRED' } };
   }
 
-  const { data: membershipRows, error: membershipError } = await supabase
+  const { data: membershipRows, error: membershipError } = await measureMyopsPhase('business_context', () => supabase
     .from('business_members')
     .select('business_id, role, businesses(id, name, registration_no, address, phone, email, base_currency, fiscal_year_start, created_at, updated_at)')
-    .eq('user_id', userId);
+    .eq('user_id', userId)) as { data: any; error: any };
 
   if (membershipError) {
     return { business: null, memberships: [], created: false, error: membershipError.message ?? 'Business lookup failed.', context: { userId, businessId: '', state: 'NO_BUSINESS' } };
@@ -154,10 +156,10 @@ export async function resolveBusinessContextForUser(
     return null;
   }
 
-  const { data: membershipRows, error } = await supabase
+  const { data: membershipRows, error } = await measureMyopsPhase('business_context', () => supabase
     .from('business_members')
     .select('business_id, role')
-    .eq('user_id', userId);
+    .eq('user_id', userId)) as { data: any; error: any };
 
   if (error || !Array.isArray(membershipRows)) {
     return null;
