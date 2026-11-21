@@ -1,43 +1,9 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import React from 'react';
+import { getMyopsHomeUrl } from '../lib/auth/navigation';
 
-import { clearSupabaseSessionStorage, getMyopsHomeUrl, navigateToLogin } from '../lib/auth/navigation';
-import { getSupabaseBrowserClient } from '../lib/supabase/client';
-
+// Retain the export for existing callers; returning to MYOPS does not sign out.
 export function LogoutButton() {
-  const router = useRouter();
-
-  const handleLogout = async () => {
-    if (process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED === 'true') {
-      window.location.assign(getMyopsHomeUrl());
-      return;
-    }
-
-    const supabase = getSupabaseBrowserClient();
-
-    clearSupabaseSessionStorage();
-    navigateToLogin((url) => {
-      if (typeof window !== 'undefined') {
-        window.location.replace(url);
-        return;
-      }
-
-      router.replace(url);
-    });
-
-    if (supabase) {
-      try {
-        await supabase.auth.signOut();
-      } catch {
-        // Sign-out is best-effort; the browser is already navigated back to the login page.
-      }
-    }
-  };
-
-  return (
-    <button type="button" onClick={handleLogout} style={{ marginTop: '0.75rem' }}>
-      {process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED === 'true' ? 'Back to MYOPS' : 'Sign out'}
-    </button>
-  );
+  return <a href={getMyopsHomeUrl()} style={{ marginTop: '0.75rem' }}>Back to MYOPS</a>;
 }
