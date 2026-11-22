@@ -40,7 +40,7 @@ it.each(['true', 'false'])('returns to MYOPS without ending the session (SSO=%s)
   const links = screen.getAllByRole('link', { name: 'Back to MYOPS' });
   expect(links).toHaveLength(2);
   for (const link of links) {
-    expect(link.getAttribute('href')).toBe('https://www.myops.com.my/');
+    expect(link.getAttribute('href')).toBe('https://app.myops.com.my/');
     link.addEventListener('click', e => e.preventDefault(), { once: true });
     fireEvent.click(link);
   }
