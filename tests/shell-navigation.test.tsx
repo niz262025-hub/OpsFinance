@@ -1,12 +1,13 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-vi.mock('next/navigation', () => ({ usePathname: () => '/reports/general-ledger', useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('next/navigation', () => ({ usePathname: () => '/reports/general-ledger' }));
 vi.mock('next/link', () => ({ default: ({ children, href, ...props }: any) => <a href={href} {...props}>{children}</a> }));
 vi.mock('next/image', () => ({ default: ({ src, alt }: any) => <img src={src} alt={alt} /> }));
 vi.mock('../lib/supabase/client', () => ({ getSupabaseBrowserClient: () => null }));
 import { AuthenticatedAppShell } from '../components/authenticated-shell';
-afterEach(cleanup);
+import { LogoutButton } from '../components/logout-button';
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 it('keeps the current page visible within a collapsible menu and preserves accounting routes', () => {
   render(<AuthenticatedAppShell businessName="Registered company"><div>Financial records</div></AuthenticatedAppShell>);
@@ -29,4 +30,19 @@ it('mobile navigation closes when a route is selected', () => {
   fireEvent.click(mobile.querySelector('a[href="/dashboard"]')!);
   expect(toggle.getAttribute('aria-expanded')).toBe('false');
   expect(document.getElementById('opsfinance-mobile-nav')).toBeNull();
+});
+
+it.each(['true', 'false'])('returns to MYOPS without ending the session (SSO=%s)', (sso) => {
+  vi.stubEnv('NEXT_PUBLIC_MYOPS_SSO_ENABLED', sso);
+  const fetchSpy = vi.fn();
+  vi.stubGlobal('fetch', fetchSpy);
+  render(<><AuthenticatedAppShell businessName="Registered company"><div>Financial records</div></AuthenticatedAppShell><LogoutButton /></>);
+  const links = screen.getAllByRole('link', { name: 'Back to MYOPS' });
+  expect(links).toHaveLength(2);
+  for (const link of links) {
+    expect(link.getAttribute('href')).toBe('https://www.myops.com.my/');
+    link.addEventListener('click', e => e.preventDefault(), { once: true });
+    fireEvent.click(link);
+  }
+  expect(fetchSpy).not.toHaveBeenCalled();
 });
