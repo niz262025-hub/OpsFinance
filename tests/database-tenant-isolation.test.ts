@@ -95,7 +95,7 @@ beforeAll(async () => {
 }, 60000);
 afterAll(async () => { await db?.close(); });
 
-describe.sequential('PostgreSQL migration replay and tenant A/B boundaries', () => {
+describe('PostgreSQL migration replay and tenant A/B boundaries', () => {
   it('can reapply migration 019 without duplicates and roll back all migration effects transactionally', async () => {
     await db.exec('reset role');
     const accountCount = await scalar('select count(*)::int as value from public.accounts where business_id=$1', [businessA]);
@@ -249,7 +249,7 @@ describe.sequential('PostgreSQL migration replay and tenant A/B boundaries', () 
 });
 
 
-describe.sequential('upload and reconciliation against the authoritative schema', () => {
+describe('upload and reconciliation against the authoritative schema', () => {
   it('persists a CSV statement and UUID bank rows and reads the reconciliation snapshot', async () => {
     await db.exec('reset role');
     await db.query("update financial_accounts set account_number='001235' where id=$1", [cashA]);
