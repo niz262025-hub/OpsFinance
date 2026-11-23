@@ -69,12 +69,28 @@ export async function requestMyops(config: MyopsTransportConfig, endpoint: 'rede
         bootstrapUrl.searchParams.set('_vercel_share', previewShare);
         // Vercel exchanges the approved share link for an HttpOnly protection cookie.
         // Do not follow its redirect or send the signed ticket during that exchange.
-        const bootstrap = await transport(bootstrapUrl.href, {method:'GET',redirect:'manual',cache:'no-store',signal:AbortSignal.timeout(20000)});
+        let bootstrap: Response;
+        try {
+          bootstrap = await transport(bootstrapUrl.href, {method:'GET',redirect:'manual',cache:'no-store',signal:AbortSignal.timeout(20000)});
+        } catch {
+          console.warn('myops_preview_transport_failed', 'bootstrap_network');
+          throw new Error('MYOPS access could not be verified.');
+        }
         const location = bootstrap.headers.get('location');
-        const destination = location ? new URL(location,bootstrapUrl) : null;
+        let destination: URL | null = null;
+        try {
+          if (location) destination = new URL(location, bootstrapUrl);
+        } catch {
+          // A malformed redirect is rejected below without logging its value.
+        }
         const cookie = bootstrap.headers.getSetCookie().find(value=>value.startsWith('_vercel_jwt='))?.split(';')[0];
-        if (![302,303,307,308].includes(bootstrap.status) || !destination || destination.href!==url.href
-          || !cookie || !/^_vercel_jwt=[A-Za-z0-9._-]+$/.test(cookie)) throw new Error('MYOPS access could not be verified.');
+        if (![302,303,307,308].includes(bootstrap.status) || destination?.href!==url.href
+          || !cookie || !/^_vercel_jwt=[A-Za-z0-9._-]+$/.test(cookie)) {
+          const reason = ![302,303,307,308].includes(bootstrap.status) ? 'bootstrap_http'
+            : destination?.href !== url.href ? 'bootstrap_redirect' : 'bootstrap_cookie';
+          console.warn('myops_preview_transport_failed', reason, bootstrap.status);
+          throw new Error('MYOPS access could not be verified.');
+        }
         return cookie;
       })();
       entry = { expires: Date.now() + 30000, cookie: cookiePromise };
