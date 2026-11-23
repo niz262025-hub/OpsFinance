@@ -26,7 +26,7 @@
     "@playwright/test": "^1.49.1",
     "@testing-library/jest-dom": "^6.6.1",
     "@testing-library/react": "^16.0.1",
-    "@types/node": "^20.14.12",
+    "@types/node": "22.20.5",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "eslint": "^8.57.0",
@@ -34,7 +34,8 @@
     "jsdom": "^24.1.0",
     "playwright": "^1.49.1",
     "typescript": "^5.5.4",
-    "vitest": "^2.1.1"
+    "vite": "8.3.8",
+    "vitest": "5.1.1"
   },
   "overrides": {
     "postcss": "8.5.33"
