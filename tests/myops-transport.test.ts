@@ -9,6 +9,20 @@ const config = { origin: 'https://myops.example', appId: 'opsfinance', keyVersio
 afterEach(()=>{vi.unstubAllEnvs();vi.restoreAllMocks();});
 
 describe('MYOPS signed server transport', () => {
+  it('reports a denied Preview bootstrap without POSTing the launch ticket', async () => {
+    vi.stubEnv('VERCEL_ENV', 'preview');
+    vi.stubEnv('MYOPS_ORIGIN', config.origin);
+    vi.stubEnv('MYOPS_STAGING_SHARE_TOKEN', 's'.repeat(32));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const transport = vi.fn().mockResolvedValue(new Response('private provider detail', { status: 401 }));
+
+    await expect(redeemMyopsTicket(config, 't'.repeat(43), transport)).rejects.toThrow('MYOPS access could not be verified.');
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(transport.mock.calls[0][1]).toMatchObject({ method: 'GET', redirect: 'manual' });
+    expect(transport.mock.calls[0][1].body).toBeUndefined();
+    expect(warn.mock.calls).toEqual([['myops_preview_transport_failed', 'bootstrap_http', 401]]);
+  });
+
   it('shares preview bootstrap across concurrent operations but checks entitlement every time and expires transport reuse', async () => {
     vi.stubEnv('MYOPS_STAGING_SHARE_TOKEN','s'.repeat(32));
     vi.stubEnv('MYOPS_ORIGIN',config.origin);vi.stubEnv('VERCEL_ENV','preview');
