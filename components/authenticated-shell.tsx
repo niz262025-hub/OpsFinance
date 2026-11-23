@@ -2,15 +2,14 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 
 import { LanguageSwitcher } from './language-switcher';
 import { trackUserActivity } from '../lib/auth/user-activity';
 
-import { isPreviewAuthBypassEnabled } from '../lib/auth/navigation';
+import { getMyopsHomeUrl } from '../lib/auth/navigation';
 import { getStoredLocale, getTranslation, getNavigationGroups, translations } from '../lib/i18n';
-import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
 type AuthenticatedAppShellProps = {
   children: React.ReactNode;
@@ -54,7 +53,6 @@ function NavigationList({ onNavigate, locale }: { onNavigate?: () => void; local
 }
 
 export function AuthenticatedAppShell({ children, businessName, userEmail }: AuthenticatedAppShellProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [idleExpired, setIdleExpired] = useState(false);
@@ -92,20 +90,6 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
         })();
       });
   }, []);
-
-  const signOut = async () => {
-    if (process.env.NEXT_PUBLIC_MYOPS_SSO_ENABLED === 'true') {
-      const response=await fetch('/api/myops/logout',{method:'POST',credentials:'same-origin'});
-      if(response.ok) { const body=await response.json(); window.location.replace(body.next); }
-      return;
-    }
-
-    const supabase = getSupabaseBrowserClient();
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
-    router.push(isPreviewAuthBypassEnabled() ? '/dashboard' : '/login');
-  };
 
   if (idleExpired) return <main role="status">{getTranslation(locale, 'logoutMessage')}</main>;
 
@@ -157,9 +141,9 @@ export function AuthenticatedAppShell({ children, businessName, userEmail }: Aut
           <div className="opsfinance-topbar-meta">
             <LanguageSwitcher value={locale as any} onChange={(nextLocale) => setLocale(nextLocale)} />
             <div className="opsfinance-business-pill">{businessName ?? getTranslation(locale, 'noActiveBusiness')}</div>
-            <button type="button" onClick={signOut} className="opsfinance-signout">
+            <a href={getMyopsHomeUrl()} className="opsfinance-signout">
               {getTranslation(locale, 'backToMyOps')}
-            </button>
+            </a>
           </div>
         </header>
 
