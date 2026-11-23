@@ -56,11 +56,11 @@ export function navigateToLogin(assign: (url: string) => void = (url) => window.
 }
 
 export function getMyopsHomeUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_MYOPS_ORIGIN ?? process.env.MYOPS_ORIGIN ?? 'https://app.myops.com.my';
+  const configured = process.env.NEXT_PUBLIC_MYOPS_ORIGIN ?? process.env.MYOPS_ORIGIN ?? 'https://www.myops.com.my';
 
   try {
     return new URL('/', configured).toString();
   } catch {
-    return 'https://app.myops.com.my/';
+    return 'https://www.myops.com.my/';
   }
 }
