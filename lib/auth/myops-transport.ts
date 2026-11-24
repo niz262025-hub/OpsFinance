@@ -74,7 +74,10 @@ export async function requestMyops(config: MyopsTransportConfig, endpoint: 'rede
         const destination = location ? new URL(location,bootstrapUrl) : null;
         const cookie = bootstrap.headers.getSetCookie().find(value=>value.startsWith('_vercel_jwt='))?.split(';')[0];
         if (![302,303,307,308].includes(bootstrap.status) || !destination || destination.href!==url.href
-          || !cookie || !/^_vercel_jwt=[A-Za-z0-9._-]+$/.test(cookie)) throw new Error('MYOPS access could not be verified.');
+          || !cookie || !/^_vercel_jwt=[A-Za-z0-9._-]+$/.test(cookie)) {
+          console.warn('myops_preview_bootstrap_rejected', bootstrap.status, destination?.href === url.href, Boolean(cookie));
+          throw new Error('MYOPS access could not be verified.');
+        }
         return cookie;
       })();
       entry = { expires: Date.now() + 30000, cookie: cookiePromise };
