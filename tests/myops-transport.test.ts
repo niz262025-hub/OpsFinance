@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { generateKeyPairSync, createHash, verify } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { canonicalJson, checkMyopsEntitlement, redeemMyopsTicket, requestMyops, signMyopsRequest } from '../lib/auth/myops-transport';
+import { canonicalJson, checkMyopsEntitlement, redeemMyopsTicket, requestMyops, signMyopsRequest, previewBootstrapDiagnostic } from '../lib/auth/myops-transport';
 
 const pair = generateKeyPairSync('ed25519');
 const config = { origin: 'https://myops.example', appId: 'opsfinance', keyVersion: 'current' as const,
@@ -102,4 +102,24 @@ describe('MYOPS response boundaries', () => {
     await expect(checkMyopsEntitlement(config, grant.session_id, false, transport)).resolves.toEqual({mode:'paid'});
     expect(JSON.parse(transport.mock.calls[0][1].body)).toEqual({ session_id: grant.session_id, product: 'opsfinance', activity: false });
   });
+});
+
+it('bound Finance checks require the Central organization on every entitlement', async () => {
+  vi.stubEnv('VERCEL_ENV','preview'); vi.stubEnv('OPSFINANCE_ORGANIZATION_BOUND','true');
+  const org='00000000-0000-4000-8000-000000000002', other='00000000-0000-4000-8000-000000000003';
+  const grant={session_id:'c08f2182-2a66-4fc9-bbe6-02a21da4d759',user_ref:'x'.repeat(43),product:'opsfinance',idle_seconds:900,max_session_seconds:43200,organization_id:org};
+  const transport=vi.fn().mockResolvedValue({ok:true,json:async()=>({entitled:true,session_active:true,organization_id:org,access_mode:'paid'})});
+  await expect(redeemMyopsTicket(config,'t'.repeat(43),vi.fn().mockResolvedValue({ok:true,json:async()=>({...grant,organization_id:undefined})}))).rejects.toThrow();
+  await expect(checkMyopsEntitlement(config,grant.session_id,false,transport,org)).resolves.toEqual({mode:'paid'});
+  expect(JSON.parse(transport.mock.calls[0][1].body).organization_id).toBe(org);
+  await expect(checkMyopsEntitlement(config,grant.session_id,false,transport,other)).rejects.toThrow();
+  await expect(checkMyopsEntitlement(config,grant.session_id,false,transport)).rejects.toThrow();
+});
+
+it('sanitizes bootstrap diagnostics without exposing redirect query or cookie values', () => {
+  const response = new Response(null, {status:302, headers:{location:'https://vercel.com/login?token=secret', 'set-cookie':'session=secret; Secure; HttpOnly; SameSite=Lax', 'x-vercel-id':'iad1::abc-123'}});
+  const result = previewBootstrapDiagnostic(new URL('https://myops.example/api/app/redeem'), response);
+  expect(result.destinationOrigin).toBe('https://vercel.com'); expect(result.destinationPath).toBe('/login');
+  expect(result.cookieAttributes).toEqual(['secure','httponly','samesite']);
+  expect(JSON.stringify(result)).not.toContain('secret'); expect(result.layer).toBe('unknown');
 });

@@ -43,6 +43,25 @@ export function signMyopsRequest(config: MyopsTransportConfig, endpoint: 'redeem
   } };
 }
 
+export function previewBootstrapDiagnostic(request: URL, response: Response) {
+  const raw = response.headers.get('location');
+  let destination: URL | null = null;
+  try { if (raw) destination = new URL(raw, request); } catch {}
+  const knownHost = destination && (destination.origin === request.origin || destination.hostname === 'vercel.com' || destination.hostname.endsWith('.vercel.com'));
+  const knownPaths = ['/api/app/redeem', '/api/app/entitlement', '/login', '/sso-api'];
+  const cookies = response.headers.getSetCookie();
+  const attributes = ['secure', 'httponly', 'samesite', 'path', 'domain', 'max-age', 'expires'].filter(name =>
+    cookies.some(cookie => cookie.split(';').slice(1).some(part => part.trim().split('=')[0].toLowerCase() === name)));
+  const requestId = response.headers.get('x-vercel-id') || '';
+  return {
+    requestOrigin: request.origin, status: response.status,
+    destinationOrigin: knownHost ? destination!.origin : destination ? '[other]' : null,
+    destinationPath: destination && knownPaths.includes(destination.pathname) ? destination.pathname : destination ? '[other]' : null,
+    setCookiePresent: cookies.length > 0, cookieAttributes: attributes,
+    correlation: /^[a-z0-9:.-]{1,160}$/i.test(requestId) ? requestId : null,
+    layer: response.headers.get('x-vercel-error') === 'DEPLOYMENT_PROTECTION' ? 'vercel_protection' : 'unknown',
+  };
+}
 // Cache only Vercel transport authentication, never user/session entitlement.
 // A warm instance shares one bootstrap for concurrent requests to the same portal.
 const previewCookies = new WeakMap<typeof fetch, Map<string, { expires: number; cookie: Promise<string> }>>();
@@ -74,7 +93,11 @@ export async function requestMyops(config: MyopsTransportConfig, endpoint: 'rede
         const destination = location ? new URL(location,bootstrapUrl) : null;
         const cookie = bootstrap.headers.getSetCookie().find(value=>value.startsWith('_vercel_jwt='))?.split(';')[0];
         if (![302,303,307,308].includes(bootstrap.status) || !destination || destination.href!==url.href
-          || !cookie || !/^_vercel_jwt=[A-Za-z0-9._-]+$/.test(cookie)) throw new Error('MYOPS access could not be verified.');
+          || !cookie || !/^_vercel_jwt=[A-Za-z0-9._-]+$/.test(cookie)) {
+          console.warn('myops_preview_bootstrap_rejected', bootstrap.status, destination?.href === url.href, Boolean(cookie));
+          console.warn('myops_preview_bootstrap_diagnostic', previewBootstrapDiagnostic(url, bootstrap));
+          throw new Error('MYOPS access could not be verified.');
+        }
         return cookie;
       })();
       entry = { expires: Date.now() + 30000, cookie: cookiePromise };
@@ -109,6 +132,7 @@ export interface MyopsGrant {
   product: 'opsfinance';
   idle_seconds: number;
   max_session_seconds: number;
+  organization_id?: string;
 }
 
 export async function redeemMyopsTicket(config: MyopsTransportConfig, ticket: string, transport: typeof fetch = fetch): Promise<MyopsGrant> {
@@ -120,16 +144,20 @@ export async function redeemMyopsTicket(config: MyopsTransportConfig, ticket: st
       || !Number.isInteger(result.max_session_seconds) || result.max_session_seconds! <= 0 || result.max_session_seconds! > 43200) {
     throw new Error('Invalid MYOPS grant.');
   }
+  if (process.env.VERCEL_ENV === 'preview' && process.env.OPSFINANCE_ORGANIZATION_BOUND === 'true' && !UUID.test(result.organization_id ?? '')) throw new Error('Invalid MYOPS organization.');
   return result as MyopsGrant;
 }
 
 // Fresh, server-side check on each protected operation. A failed lookup never grants access.
 export async function checkMyopsEntitlement(config: MyopsTransportConfig, sessionId: string, activity: boolean,
-  transport: typeof fetch = fetch) {
+  transport: typeof fetch = fetch, organizationId?: string) {
   if (!UUID.test(sessionId)) throw new Error('Invalid application session.');
+  const bound = process.env.VERCEL_ENV === 'preview' && process.env.OPSFINANCE_ORGANIZATION_BOUND === 'true';
+  if (bound && (!organizationId || !UUID.test(organizationId))) throw new Error('Invalid MYOPS organization.');
   const result = await requestMyops(config, 'entitlement', {
-    session_id: sessionId, product: 'opsfinance', activity,
-  }, transport) as { entitled?: boolean; session_active?: boolean; access_mode?: unknown; trial?: unknown } | null;
+    session_id: sessionId, product: 'opsfinance', activity, ...(bound ? { organization_id: organizationId } : {}),
+  }, transport) as { entitled?: boolean; session_active?: boolean; organization_id?: string; access_mode?: unknown; trial?: unknown } | null;
+  if (bound && result?.organization_id !== organizationId) throw new Error('MYOPS organization denied.');
   // MYOPS is the sole source of truth for entitlement, including 7-day trials.
   // The app must not hide a trial behind a local preview-only gate.
   return financeAccessFromEntitlement(result, true);

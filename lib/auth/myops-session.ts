@@ -11,6 +11,7 @@ export interface AppSession {
   businessId: string;
   accessToken: string;
   expiresAt: number;
+  organizationId?: string;
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export function ssoEnabled() { return process.env.MYOPS_SSO_ENABLED === 'true'; }
@@ -38,7 +39,7 @@ export function ssoConfig(): { transport: MyopsTransportConfig; appOrigin: strin
     const key = createPrivateKey(process.env.MYOPS_APP_PRIVATE_KEY);
     if (key.asymmetricKeyType !== 'ed25519') throw new Error('invalid key type');
   } catch { throw new Error('SSO Ed25519 private key is invalid.'); }
-  return { appOrigin, secret, transport: { origin, appId: 'opsfinance', keyVersion: 'current', privateKey: process.env.MYOPS_APP_PRIVATE_KEY } };
+  return { appOrigin, secret, transport: { origin, appId: 'opsfinance', keyVersion: (process.env.VERCEL_ENV === 'preview' && process.env.MYOPS_APP_KEY_VERSION === 'next' ? 'next' : 'current') as 'current' | 'next', privateKey: process.env.MYOPS_APP_PRIVATE_KEY } };
 }
 export function sealSession(session: AppSession, secret: string): string {
   if (secret.length < 32) throw new Error('Invalid session key.');
@@ -59,6 +60,8 @@ export function openSession(value: string | undefined, secret: string, now = Dat
     const session = JSON.parse(Buffer.concat([cipher.update(bytes.subarray(28)), cipher.final()]).toString()) as AppSession;
     if (session.version !== 1 || !UUID.test(session.sessionId) || !UUID.test(session.userId) || !UUID.test(session.businessId)
       || !/^[A-Za-z0-9_-]{43}$/.test(session.userRef) || typeof session.accessToken !== 'string' || !session.accessToken
+      || (session.organizationId !== undefined && !UUID.test(session.organizationId))
+      || (process.env.VERCEL_ENV === 'preview' && process.env.OPSFINANCE_ORGANIZATION_BOUND === 'true' && !session.organizationId)
       || !Number.isSafeInteger(session.expiresAt) || session.expiresAt <= now || session.expiresAt > now + 43200000) return null;
     return session;
   } catch { return null; }
