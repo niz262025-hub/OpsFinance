@@ -109,6 +109,7 @@ export interface MyopsGrant {
   product: 'opsfinance';
   idle_seconds: number;
   max_session_seconds: number;
+  organization_id?: string;
 }
 
 export async function redeemMyopsTicket(config: MyopsTransportConfig, ticket: string, transport: typeof fetch = fetch): Promise<MyopsGrant> {
@@ -120,16 +121,20 @@ export async function redeemMyopsTicket(config: MyopsTransportConfig, ticket: st
       || !Number.isInteger(result.max_session_seconds) || result.max_session_seconds! <= 0 || result.max_session_seconds! > 43200) {
     throw new Error('Invalid MYOPS grant.');
   }
+  if (process.env.VERCEL_ENV === 'preview' && process.env.OPSFINANCE_ORGANIZATION_BOUND === 'true' && !UUID.test(result.organization_id ?? '')) throw new Error('Invalid MYOPS organization.');
   return result as MyopsGrant;
 }
 
 // Fresh, server-side check on each protected operation. A failed lookup never grants access.
 export async function checkMyopsEntitlement(config: MyopsTransportConfig, sessionId: string, activity: boolean,
-  transport: typeof fetch = fetch) {
+  transport: typeof fetch = fetch, organizationId?: string) {
   if (!UUID.test(sessionId)) throw new Error('Invalid application session.');
+  const bound = process.env.VERCEL_ENV === 'preview' && process.env.OPSFINANCE_ORGANIZATION_BOUND === 'true';
+  if (bound && (!organizationId || !UUID.test(organizationId))) throw new Error('Invalid MYOPS organization.');
   const result = await requestMyops(config, 'entitlement', {
-    session_id: sessionId, product: 'opsfinance', activity,
-  }, transport) as { entitled?: boolean; session_active?: boolean; access_mode?: unknown; trial?: unknown } | null;
+    session_id: sessionId, product: 'opsfinance', activity, ...(bound ? { organization_id: organizationId } : {}),
+  }, transport) as { entitled?: boolean; session_active?: boolean; organization_id?: string; access_mode?: unknown; trial?: unknown } | null;
+  if (bound && result?.organization_id !== organizationId) throw new Error('MYOPS organization denied.');
   // MYOPS is the sole source of truth for entitlement, including 7-day trials.
   // The app must not hide a trial behind a local preview-only gate.
   return financeAccessFromEntitlement(result, true);

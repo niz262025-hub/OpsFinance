@@ -103,3 +103,15 @@ describe('MYOPS response boundaries', () => {
     expect(JSON.parse(transport.mock.calls[0][1].body)).toEqual({ session_id: grant.session_id, product: 'opsfinance', activity: false });
   });
 });
+
+it('bound Finance checks require the Central organization on every entitlement', async () => {
+  vi.stubEnv('VERCEL_ENV','preview'); vi.stubEnv('OPSFINANCE_ORGANIZATION_BOUND','true');
+  const org='00000000-0000-4000-8000-000000000002', other='00000000-0000-4000-8000-000000000003';
+  const grant={session_id:'c08f2182-2a66-4fc9-bbe6-02a21da4d759',user_ref:'x'.repeat(43),product:'opsfinance',idle_seconds:900,max_session_seconds:43200,organization_id:org};
+  const transport=vi.fn().mockResolvedValue({ok:true,json:async()=>({entitled:true,session_active:true,organization_id:org,access_mode:'paid'})});
+  await expect(redeemMyopsTicket(config,'t'.repeat(43),vi.fn().mockResolvedValue({ok:true,json:async()=>({...grant,organization_id:undefined})}))).rejects.toThrow();
+  await expect(checkMyopsEntitlement(config,grant.session_id,false,transport,org)).resolves.toEqual({mode:'paid'});
+  expect(JSON.parse(transport.mock.calls[0][1].body).organization_id).toBe(org);
+  await expect(checkMyopsEntitlement(config,grant.session_id,false,transport,other)).rejects.toThrow();
+  await expect(checkMyopsEntitlement(config,grant.session_id,false,transport)).rejects.toThrow();
+});

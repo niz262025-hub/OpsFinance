@@ -14,12 +14,16 @@ function clients() {
   if (!url || !key || !adminKey) throw new Error('SSO identity bridge is not configured.');
   return { url, key, admin: createClient(url, adminKey, { auth: { persistSession: false, autoRefreshToken: false },global:{headers:myopsBrokerHeaders()} }) };
 }
-async function mappedIdentity(userRef: string, configured = clients(), onboardingProfile?: unknown) {
+async function mappedIdentity(userRef: string, configured = clients(), onboardingProfile?: unknown, organizationId?: string) {
   const { url, key, admin } = configured;
-  const { data: existing, error } = await admin.from('myops_identity_links')
-    .select('supabase_user_id,business_id').eq('user_ref', userRef).eq('enabled',true).maybeSingle();
+  const bound = process.env.VERCEL_ENV === 'preview' && process.env.OPSFINANCE_ORGANIZATION_BOUND === 'true';
+  if (bound && !organizationId) throw new Error('Organization mapping required.');
+  let query = admin.from(bound ? 'myops_organization_business_links' : 'myops_identity_links')
+    .select('supabase_user_id,business_id').eq('user_ref', userRef).eq('enabled',true);
+  if (bound) query = query.eq('organization_id', organizationId!);
+  const { data: existing, error } = await query.maybeSingle();
   let mapping=existing;
-  if(!error&&!mapping&&onboardingProfile!==undefined&&process.env.VERCEL_ENV==='preview'
+  if(!bound&&!error&&!mapping&&onboardingProfile!==undefined&&process.env.VERCEL_ENV==='preview'
     &&process.env.OPSFINANCE_MYOPS_PROVISIONING_READY==='true') {
     mapping=await provisionFinanceIdentity(admin,userRef,onboardingProfile);
   }
@@ -33,9 +37,10 @@ async function mappedIdentity(userRef: string, configured = clients(), onboardin
 export async function establishMyopsSession(ticket: string): Promise<AppSession> {
   const config = ssoConfig();
   const grant = await redeemMyopsTicket(config.transport, ticket);
+  const organizationId = process.env.VERCEL_ENV === 'preview' && process.env.OPSFINANCE_ORGANIZATION_BOUND === 'true' ? grant.organization_id?.toLowerCase() : undefined;
   // Check access before provisioning or minting any local identity/session.
-  await checkMyopsEntitlement(config.transport,grant.session_id,true);
-  const { url, key, admin, mapping } = await mappedIdentity(grant.user_ref,clients(),grant.onboarding_profile);
+  await checkMyopsEntitlement(config.transport,grant.session_id,true,fetch,organizationId);
+  const { url, key, admin, mapping } = await mappedIdentity(grant.user_ref,clients(),grant.onboarding_profile,organizationId);
   const { data: identity, error: identityError } = await admin.auth.admin.getUserById(mapping.supabase_user_id);
   const user = identity.user;
   if (identityError || !user?.email || !user.email_confirmed_at) throw new Error('Mapped identity is unavailable.');
@@ -49,9 +54,9 @@ export async function establishMyopsSession(ticket: string): Promise<AppSession>
   const { data: member, error: memberError } = await client.from('business_members').select('business_id')
     .eq('user_id',user.id).eq('business_id',mapping.business_id).maybeSingle();
   if (memberError || !member) throw new Error('Business access denied.');
-  await checkMyopsEntitlement(config.transport,grant.session_id,true);
+  await checkMyopsEntitlement(config.transport,grant.session_id,true,fetch,organizationId);
   return {version:1, sessionId:grant.session_id,userRef:grant.user_ref,userId:user.id,businessId:mapping.business_id,
-    accessToken:data.session.access_token,expiresAt:Math.min(data.session.expires_at*1000,Date.now()+grant.max_session_seconds*1000)};
+    accessToken:data.session.access_token,expiresAt:Math.min(data.session.expires_at*1000,Date.now()+grant.max_session_seconds*1000), ...(organizationId ? { organizationId } : {})};
 }
 export async function verifiedMyopsClient(activity = false) {
   const config = ssoConfig();
@@ -63,8 +68,8 @@ export async function verifiedMyopsClient(activity = false) {
   // These are independent, read-only access checks. No business data client is
   // returned until all four checks pass; nothing is cached between requests.
   const [access, { mapping }, { data, error }, { data: member, error: memberError }] = await Promise.all([
-    measureMyopsPhase('central_entitlement', () => checkMyopsEntitlement(config.transport,session.sessionId,activity)),
-    measureMyopsPhase('identity_mapping', () => mappedIdentity(session.userRef, configured)),
+    measureMyopsPhase('central_entitlement', () => checkMyopsEntitlement(config.transport,session.sessionId,activity,fetch,session.organizationId)),
+    measureMyopsPhase('identity_mapping', () => mappedIdentity(session.userRef, configured,undefined,session.organizationId)),
     measureMyopsPhase('local_identity', () => client.auth.getUser(session.accessToken)),
     measureMyopsPhase('local_membership', () => client.from('business_members').select('business_id')
       .eq('user_id',session.userId).eq('business_id',session.businessId).maybeSingle()),
