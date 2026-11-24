@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { generateKeyPairSync, createHash, verify } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { canonicalJson, checkMyopsEntitlement, redeemMyopsTicket, requestMyops, signMyopsRequest } from '../lib/auth/myops-transport';
+import { canonicalJson, checkMyopsEntitlement, redeemMyopsTicket, requestMyops, signMyopsRequest, previewBootstrapDiagnostic } from '../lib/auth/myops-transport';
 
 const pair = generateKeyPairSync('ed25519');
 const config = { origin: 'https://myops.example', appId: 'opsfinance', keyVersion: 'current' as const,
@@ -114,4 +114,12 @@ it('bound Finance checks require the Central organization on every entitlement',
   expect(JSON.parse(transport.mock.calls[0][1].body).organization_id).toBe(org);
   await expect(checkMyopsEntitlement(config,grant.session_id,false,transport,other)).rejects.toThrow();
   await expect(checkMyopsEntitlement(config,grant.session_id,false,transport)).rejects.toThrow();
+});
+
+it('sanitizes bootstrap diagnostics without exposing redirect query or cookie values', () => {
+  const response = new Response(null, {status:302, headers:{location:'https://vercel.com/login?token=secret', 'set-cookie':'session=secret; Secure; HttpOnly; SameSite=Lax', 'x-vercel-id':'iad1::abc-123'}});
+  const result = previewBootstrapDiagnostic(new URL('https://myops.example/api/app/redeem'), response);
+  expect(result.destinationOrigin).toBe('https://vercel.com'); expect(result.destinationPath).toBe('/login');
+  expect(result.cookieAttributes).toEqual(['secure','httponly','samesite']);
+  expect(JSON.stringify(result)).not.toContain('secret'); expect(result.layer).toBe('unknown');
 });

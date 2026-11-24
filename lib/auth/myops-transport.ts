@@ -43,6 +43,25 @@ export function signMyopsRequest(config: MyopsTransportConfig, endpoint: 'redeem
   } };
 }
 
+export function previewBootstrapDiagnostic(request: URL, response: Response) {
+  const raw = response.headers.get('location');
+  let destination: URL | null = null;
+  try { if (raw) destination = new URL(raw, request); } catch {}
+  const knownHost = destination && (destination.origin === request.origin || destination.hostname === 'vercel.com' || destination.hostname.endsWith('.vercel.com'));
+  const knownPaths = ['/api/app/redeem', '/api/app/entitlement', '/login', '/sso-api'];
+  const cookies = response.headers.getSetCookie();
+  const attributes = ['secure', 'httponly', 'samesite', 'path', 'domain', 'max-age', 'expires'].filter(name =>
+    cookies.some(cookie => cookie.split(';').slice(1).some(part => part.trim().split('=')[0].toLowerCase() === name)));
+  const requestId = response.headers.get('x-vercel-id') || '';
+  return {
+    requestOrigin: request.origin, status: response.status,
+    destinationOrigin: knownHost ? destination!.origin : destination ? '[other]' : null,
+    destinationPath: destination && knownPaths.includes(destination.pathname) ? destination.pathname : destination ? '[other]' : null,
+    setCookiePresent: cookies.length > 0, cookieAttributes: attributes,
+    correlation: /^[a-z0-9:.-]{1,160}$/i.test(requestId) ? requestId : null,
+    layer: response.headers.get('x-vercel-error') === 'DEPLOYMENT_PROTECTION' ? 'vercel_protection' : 'unknown',
+  };
+}
 // Cache only Vercel transport authentication, never user/session entitlement.
 // A warm instance shares one bootstrap for concurrent requests to the same portal.
 const previewCookies = new WeakMap<typeof fetch, Map<string, { expires: number; cookie: Promise<string> }>>();
@@ -76,6 +95,7 @@ export async function requestMyops(config: MyopsTransportConfig, endpoint: 'rede
         if (![302,303,307,308].includes(bootstrap.status) || !destination || destination.href!==url.href
           || !cookie || !/^_vercel_jwt=[A-Za-z0-9._-]+$/.test(cookie)) {
           console.warn('myops_preview_bootstrap_rejected', bootstrap.status, destination?.href === url.href, Boolean(cookie));
+          console.warn('myops_preview_bootstrap_diagnostic', previewBootstrapDiagnostic(url, bootstrap));
           throw new Error('MYOPS access could not be verified.');
         }
         return cookie;
