@@ -39,7 +39,7 @@ export function ssoConfig(): { transport: MyopsTransportConfig; appOrigin: strin
     const key = createPrivateKey(process.env.MYOPS_APP_PRIVATE_KEY);
     if (key.asymmetricKeyType !== 'ed25519') throw new Error('invalid key type');
   } catch { throw new Error('SSO Ed25519 private key is invalid.'); }
-  return { appOrigin, secret, transport: { origin, appId: 'opsfinance', keyVersion: 'current', privateKey: process.env.MYOPS_APP_PRIVATE_KEY } };
+  return { appOrigin, secret, transport: { origin, appId: 'opsfinance', keyVersion: (process.env.VERCEL_ENV === 'preview' && process.env.MYOPS_APP_KEY_VERSION === 'next' ? 'next' : 'current') as 'current' | 'next', privateKey: process.env.MYOPS_APP_PRIVATE_KEY } };
 }
 export function sealSession(session: AppSession, secret: string): string {
   if (secret.length < 32) throw new Error('Invalid session key.');
