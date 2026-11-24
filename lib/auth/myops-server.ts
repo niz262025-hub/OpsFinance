@@ -7,6 +7,10 @@ import { checkMyopsEntitlement, redeemMyopsTicket } from './myops-transport';
 import { myopsBrokerHeaders } from './myops-broker';
 import { measureMyopsPhase } from './myops-performance';
 
+function checkAccess(transport: ReturnType<typeof ssoConfig>['transport'], sessionId: string, activity: boolean, organizationId?: string) {
+  return organizationId ? checkMyopsEntitlement(transport,sessionId,activity,fetch,organizationId) : checkMyopsEntitlement(transport,sessionId,activity);
+}
+
 function clients() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -39,7 +43,7 @@ export async function establishMyopsSession(ticket: string): Promise<AppSession>
   const grant = await redeemMyopsTicket(config.transport, ticket);
   const organizationId = process.env.VERCEL_ENV === 'preview' && process.env.OPSFINANCE_ORGANIZATION_BOUND === 'true' ? grant.organization_id?.toLowerCase() : undefined;
   // Check access before provisioning or minting any local identity/session.
-  await checkMyopsEntitlement(config.transport,grant.session_id,true,fetch,organizationId);
+  await checkAccess(config.transport,grant.session_id,true,organizationId);
   const { url, key, admin, mapping } = await mappedIdentity(grant.user_ref,clients(),grant.onboarding_profile,organizationId);
   const { data: identity, error: identityError } = await admin.auth.admin.getUserById(mapping.supabase_user_id);
   const user = identity.user;
@@ -54,7 +58,7 @@ export async function establishMyopsSession(ticket: string): Promise<AppSession>
   const { data: member, error: memberError } = await client.from('business_members').select('business_id')
     .eq('user_id',user.id).eq('business_id',mapping.business_id).maybeSingle();
   if (memberError || !member) throw new Error('Business access denied.');
-  await checkMyopsEntitlement(config.transport,grant.session_id,true,fetch,organizationId);
+  await checkAccess(config.transport,grant.session_id,true,organizationId);
   return {version:1, sessionId:grant.session_id,userRef:grant.user_ref,userId:user.id,businessId:mapping.business_id,
     accessToken:data.session.access_token,expiresAt:Math.min(data.session.expires_at*1000,Date.now()+grant.max_session_seconds*1000), ...(organizationId ? { organizationId } : {})};
 }
@@ -68,7 +72,7 @@ export async function verifiedMyopsClient(activity = false) {
   // These are independent, read-only access checks. No business data client is
   // returned until all four checks pass; nothing is cached between requests.
   const [access, { mapping }, { data, error }, { data: member, error: memberError }] = await Promise.all([
-    measureMyopsPhase('central_entitlement', () => checkMyopsEntitlement(config.transport,session.sessionId,activity,fetch,session.organizationId)),
+    measureMyopsPhase('central_entitlement', () => checkAccess(config.transport,session.sessionId,activity,session.organizationId)),
     measureMyopsPhase('identity_mapping', () => mappedIdentity(session.userRef, configured,undefined,session.organizationId)),
     measureMyopsPhase('local_identity', () => client.auth.getUser(session.accessToken)),
     measureMyopsPhase('local_membership', () => client.from('business_members').select('business_id')
