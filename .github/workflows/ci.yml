@@ -3,7 +3,7 @@ name: Validate OpsFinance
 on:
   pull_request:
   push:
-    branches: [main, copilot/complete-opsfinance-modules]
+    branches: [main, copilot/complete-opsfinance-modules, staging/production-baseline]
 
 permissions:
   contents: read
