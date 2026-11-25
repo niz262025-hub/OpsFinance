@@ -40,7 +40,8 @@ assert.equal((await db.query("select has_function_privilege('authenticated','pub
 await db.exec('set role anon');
 await assert.rejects(db.query("select public.get_accounting_idempotency('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','private-b-key')"),/permission denied/);
 await db.exec('reset role');
-await db.exec("insert into auth.users(id) values ('11111111-1111-1111-1111-111111111111')");
+await db.exec(`insert into auth.users(id,email,raw_user_meta_data) values ('11111111-1111-1111-1111-111111111111','a@test.invalid','{"full_name":"A"}'::jsonb)`);
+assert.deepEqual((await db.query("select email,name from public.users where id='11111111-1111-1111-1111-111111111111'")).rows,[{email:'a@test.invalid',name:'A'}]);
 await assert.rejects(db.query("insert into public.myops_identity_links(user_ref,supabase_user_id,business_id) values ($1,'11111111-1111-1111-1111-111111111111','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')",['x'.repeat(43)]),/foreign key/);
 await db.query("insert into public.myops_identity_links(user_ref,supabase_user_id,business_id) values ($1,'11111111-1111-1111-1111-111111111111','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')",['x'.repeat(43)]);
 await db.exec('set role authenticated');
