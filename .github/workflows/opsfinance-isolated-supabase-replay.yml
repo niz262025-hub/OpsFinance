@@ -1,0 +1,76 @@
+name: OpsFinance isolated Supabase replay
+on:
+  push:
+    branches: ['staging/production-baseline']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.54.11
+      - name: Start disposable Supabase
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/opsfinance-replay"
+          cd "$RUNNER_TEMP/opsfinance-replay"
+          supabase init
+          supabase start
+      - name: Replay all 32 migrations and verify security
+        run: |
+          set -euo pipefail
+          export PGHOST=127.0.0.1 PGPORT=54322 PGUSER=postgres PGPASSWORD=postgres PGDATABASE=postgres
+          shopt -s nullglob
+          migrations=(supabase/migrations/*.sql)
+          test "${#migrations[@]}" -eq 32
+          for file in "${migrations[@]}"; do
+            echo "Replay: $file"
+            psql -X -v ON_ERROR_STOP=1 -f "$file"
+          done
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          DO $checks$
+          DECLARE t text; p text; f text;
+          BEGIN
+            FOREACH t IN ARRAY ARRAY['users','businesses','business_members','subscriptions','financial_accounts','accounts','transactions','journal_entries','journal_lines','accounting_periods','accounting_rules','bank_statements','bank_transactions','reconciliation_matches','attachments','audit_logs','idempotency_keys','myops_identity_links','opsfinance_trial_bindings','opsfinance_trial_usage','opsfinance_trial_import_receipts'] LOOP
+              IF to_regclass('public.'||t) IS NULL THEN RAISE EXCEPTION 'Missing table %',t; END IF;
+              IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid=to_regclass('public.'||t)) THEN RAISE EXCEPTION 'RLS missing %',t; END IF;
+            END LOOP;
+            FOREACH t IN ARRAY ARRAY['myops_identity_links','opsfinance_trial_bindings','opsfinance_trial_usage','opsfinance_trial_import_receipts'] LOOP
+              FOREACH p IN ARRAY ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'] LOOP
+                IF has_table_privilege('anon','public.'||t,p) OR has_table_privilege('authenticated','public.'||t,p) THEN RAISE EXCEPTION 'Unexpected browser privilege % %',t,p; END IF;
+              END LOOP;
+              IF NOT has_table_privilege('service_role','public.'||t,'SELECT') OR NOT has_table_privilege('service_role','public.'||t,'INSERT') THEN RAISE EXCEPTION 'Missing server read/write %',t; END IF;
+            END LOOP;
+            FOREACH t IN ARRAY ARRAY['opsfinance_trial_bindings','opsfinance_trial_usage','opsfinance_trial_import_receipts'] LOOP
+              FOREACH p IN ARRAY ARRAY['TRUNCATE','REFERENCES','TRIGGER'] LOOP
+                IF has_table_privilege('service_role','public.'||t,p) THEN RAISE EXCEPTION 'Excess server schema privilege % %',t,p; END IF;
+              END LOOP;
+            END LOOP;
+            FOREACH f IN ARRAY ARRAY['opsfinance_consume_trial_quota(uuid,uuid,text,uuid,timestamp with time zone)','opsfinance_trial_post_transaction(uuid,uuid,uuid,timestamp with time zone,jsonb)','opsfinance_trial_import_statement(uuid,uuid,uuid,timestamp with time zone,jsonb,jsonb,text)','opsfinance_provision_myops_identity(text,uuid,text,text,text)'] LOOP
+              IF to_regprocedure('public.'||f) IS NULL THEN RAISE EXCEPTION 'Missing RPC %',f; END IF;
+              IF has_function_privilege('anon','public.'||f,'EXECUTE') OR has_function_privilege('authenticated','public.'||f,'EXECUTE') OR NOT has_function_privilege('service_role','public.'||f,'EXECUTE') THEN RAISE EXCEPTION 'RPC ACL mismatch %',f; END IF;
+            END LOOP;
+            IF to_regprocedure('public.get_accounting_idempotency(uuid,text,text)') IS NULL OR has_function_privilege('anon','public.get_accounting_idempotency(uuid,text,text)','EXECUTE') THEN RAISE EXCEPTION 'idempotency ACL mismatch'; END IF;
+            IF to_regprocedure('public.post_accounting_transaction_atomic(uuid,text,text,date,text,text,numeric,uuid,uuid,text,text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Missing atomic posting'; END IF;
+            IF to_regprocedure('public.create_business_with_owner(text,text,text,text,text,text,text)') IS NULL THEN RAISE EXCEPTION 'Missing owner provisioning'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='validate_journal_line_business_scope_trigger' AND NOT tgisinternal AND tgenabled='O') THEN RAISE EXCEPTION 'Missing journal integrity trigger'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='sync_public_user_profile' AND tgrelid='auth.users'::regclass AND NOT tgisinternal AND tgenabled='O') THEN RAISE EXCEPTION 'Missing auth profile trigger'; END IF;
+            IF to_regprocedure('private.myops_broker_allowed()') IS NULL OR NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND policyname='myops_broker_required' AND permissive='RESTRICTIVE') THEN RAISE EXCEPTION 'Missing broker gate'; END IF;
+            IF NOT has_column_privilege('authenticated','public.businesses','name','UPDATE') THEN RAISE EXCEPTION 'Business profile update missing'; END IF;
+            IF NOT has_column_privilege('authenticated','public.bank_statements','status','UPDATE') OR NOT has_table_privilege('authenticated','public.bank_statements','INSERT') THEN RAISE EXCEPTION 'Bank statement permissions missing'; END IF;
+            IF NOT has_table_privilege('authenticated','public.accounting_rules','INSERT') OR NOT has_table_privilege('authenticated','public.accounting_periods','UPDATE') THEN RAISE EXCEPTION 'Accounting permissions missing'; END IF;
+            RAISE NOTICE 'OpsFinance migration and security catalog assertions passed';
+          END $checks$;
+          SQL
+      - name: Cleanup disposable Supabase
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/opsfinance-replay/supabase" ]; then
+            cd "$RUNNER_TEMP/opsfinance-replay"
+            supabase stop --no-backup
+          fi
