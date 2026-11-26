@@ -105,6 +105,23 @@ jobs:
             IF NOT blocked THEN RAISE EXCEPTION 'Cross-tenant INSERT permitted'; END IF;
             IF public.get_accounting_idempotency('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','synthetic-private-key') IS NOT NULL THEN RAISE EXCEPTION 'Cross-tenant idempotency leak'; END IF;
           END $behavior$;
+          DO $behavior$
+          DECLARE account_a uuid; first_result jsonb; retry_result jsonb; blocked boolean := false; n integer;
+          BEGIN
+            SELECT id INTO account_a FROM public.accounts WHERE business_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' ORDER BY code LIMIT 1;
+            IF account_a IS NULL THEN RAISE EXCEPTION 'Owner provisioning did not seed accounts'; END IF;
+            BEGIN
+              PERFORM public.post_accounting_transaction_atomic('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','invalid-post','MONEY_IN',current_date,'invalid','invalid-post',10,NULL,account_a,'invalid-journal','invalid',jsonb_build_array(jsonb_build_object('account_id',account_a,'debit',10,'credit',0),jsonb_build_object('account_id',account_a,'debit',0,'credit',9)));
+            EXCEPTION WHEN raise_exception THEN blocked := true;
+            END;
+            IF NOT blocked THEN RAISE EXCEPTION 'Unbalanced posting accepted'; END IF;
+            IF EXISTS (SELECT 1 FROM public.idempotency_keys WHERE business_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND idempotency_key='invalid-post') THEN RAISE EXCEPTION 'Rejected posting left an idempotency record'; END IF;
+            first_result := public.post_accounting_transaction_atomic('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','valid-post','MONEY_IN',current_date,'synthetic','valid-post',10,NULL,account_a,'valid-journal','synthetic',jsonb_build_array(jsonb_build_object('account_id',account_a,'debit',10,'credit',0),jsonb_build_object('account_id',account_a,'debit',0,'credit',10)));
+            retry_result := public.post_accounting_transaction_atomic('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','valid-post','MONEY_IN',current_date,'synthetic','valid-post',10,NULL,account_a,'valid-journal','synthetic',jsonb_build_array(jsonb_build_object('account_id',account_a,'debit',10,'credit',0),jsonb_build_object('account_id',account_a,'debit',0,'credit',10)));
+            IF (retry_result->>'idempotent')::boolean IS NOT TRUE OR first_result->>'transaction_id' IS DISTINCT FROM retry_result->>'transaction_id' THEN RAISE EXCEPTION 'Atomic posting retry failed'; END IF;
+            SELECT count(*) INTO n FROM public.transactions WHERE business_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND reference_no='valid-post';
+            IF n <> 1 THEN RAISE EXCEPTION 'Posting duplicated'; END IF;
+          END $behavior$;
           SELECT set_config('request.jwt.claim.sub','22222222-2222-4222-8222-222222222222',true);
           DO $behavior$
           BEGIN
@@ -112,6 +129,20 @@ jobs:
             IF public.get_accounting_idempotency('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','synthetic-private-key') IS DISTINCT FROM '33333333-3333-4333-8333-333333333333'::uuid THEN RAISE EXCEPTION 'Owner idempotency denied'; END IF;
           END $behavior$;
           RESET ROLE;
+          DO $behavior$
+          DECLARE journal_a uuid; account_b uuid; blocked boolean := false;
+          BEGIN
+            SELECT id INTO journal_a FROM public.journal_entries WHERE business_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND journal_no='valid-journal';
+            SELECT id INTO account_b FROM public.accounts WHERE business_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' ORDER BY code LIMIT 1;
+            IF journal_a IS NULL OR account_b IS NULL THEN RAISE EXCEPTION 'Missing journal isolation fixture'; END IF;
+            BEGIN
+              INSERT INTO public.journal_lines(journal_entry_id,account_id,debit,credit) VALUES(journal_a,account_b,1,0);
+            EXCEPTION WHEN raise_exception THEN
+              IF SQLERRM NOT LIKE '%Journal account does not belong%' THEN RAISE; END IF;
+              blocked := true;
+            END;
+            IF NOT blocked THEN RAISE EXCEPTION 'Cross-tenant journal line accepted'; END IF;
+          END $behavior$;
           DO $behavior$
           DECLARE i integer; result jsonb; blocked boolean := false;
           BEGIN
@@ -128,6 +159,32 @@ jobs:
             IF NOT blocked THEN RAISE EXCEPTION 'Quota limit not enforced'; END IF;
             IF (SELECT count(*) FROM public.opsfinance_trial_usage WHERE trial_id='44444444-4444-4444-8444-444444444444') <> 30 THEN RAISE EXCEPTION 'Rejected quota write changed data'; END IF;
           END $behavior$;
+          -- Test the broker using only a disposable synthetic key in this transaction.
+          UPDATE private.myops_broker_config SET enabled=true,key_hash=encode(sha256(convert_to(repeat('x',32),'UTF8')),'hex');
+          SELECT set_config('request.headers','{}',true);
+          DO $behavior$
+          BEGIN
+            IF private.myops_broker_allowed() THEN RAISE EXCEPTION 'Broker admitted missing key'; END IF;
+          END $behavior$;
+          SELECT set_config('request.headers',jsonb_build_object('x-myops-broker-key',repeat('x',32))::text,true);
+          DO $behavior$
+          BEGIN
+            IF NOT private.myops_broker_allowed() THEN RAISE EXCEPTION 'Broker rejected valid synthetic key'; END IF;
+          END $behavior$;
+          UPDATE private.myops_broker_config SET enabled=false,key_hash=NULL;
+          INSERT INTO auth.users(id,email,email_confirmed_at,raw_app_meta_data,raw_user_meta_data)
+          VALUES ('77777777-7777-4777-8777-777777777777','finance-bridge@example.invalid',now(),
+                  jsonb_build_object('myops_user_ref',repeat('u',43),'myops_bridge','opsfinance-v1'),'{"full_name":"Bridge"}');
+          SET LOCAL ROLE service_role;
+          DO $behavior$
+          DECLARE first_result jsonb; retry_result jsonb;
+          BEGIN
+            first_result := public.opsfinance_provision_myops_identity(repeat('u',43),'77777777-7777-4777-8777-777777777777','finance-bridge@example.invalid','Bridge','Synthetic Company');
+            retry_result := public.opsfinance_provision_myops_identity(repeat('u',43),'77777777-7777-4777-8777-777777777777','finance-bridge@example.invalid','Bridge','Changed Label');
+            IF first_result IS DISTINCT FROM retry_result THEN RAISE EXCEPTION 'Identity retry remapped'; END IF;
+            IF (SELECT count(*) FROM public.business_members WHERE user_id='77777777-7777-4777-8777-777777777777') <> 1 THEN RAISE EXCEPTION 'Identity duplicate or missing owner'; END IF;
+          END $behavior$;
+          RESET ROLE;
           ROLLBACK;
           SQL
       - name: Cleanup disposable Supabase
