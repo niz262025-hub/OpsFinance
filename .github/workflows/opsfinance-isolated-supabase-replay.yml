@@ -61,8 +61,11 @@ jobs:
             IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='validate_journal_line_business_scope_trigger' AND NOT tgisinternal AND tgenabled='O') THEN RAISE EXCEPTION 'Missing journal integrity trigger'; END IF;
             IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='sync_public_user_profile' AND tgrelid='auth.users'::regclass AND NOT tgisinternal AND tgenabled='O') THEN RAISE EXCEPTION 'Missing auth profile trigger'; END IF;
             IF to_regprocedure('private.myops_broker_allowed()') IS NULL OR NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND policyname='myops_broker_required' AND permissive='RESTRICTIVE') THEN RAISE EXCEPTION 'Missing broker gate'; END IF;
-            IF NOT has_column_privilege('authenticated','public.businesses','name','UPDATE') THEN RAISE EXCEPTION 'Business profile update missing'; END IF;
+            FOREACH p IN ARRAY ARRAY['name','registration_no','address','phone','email','base_currency','fiscal_year_start','updated_at'] LOOP
+              IF NOT has_column_privilege('authenticated','public.businesses',p,'UPDATE') THEN RAISE EXCEPTION 'Business profile update missing %',p; END IF;
+            END LOOP;
             IF NOT has_column_privilege('authenticated','public.bank_statements','status','UPDATE') OR NOT has_table_privilege('authenticated','public.bank_statements','INSERT') THEN RAISE EXCEPTION 'Bank statement permissions missing'; END IF;
+            IF NOT has_column_privilege('authenticated','public.bank_transactions','status','UPDATE') OR NOT has_table_privilege('authenticated','public.bank_transactions','INSERT') OR NOT has_table_privilege('authenticated','public.reconciliation_matches','INSERT') THEN RAISE EXCEPTION 'Reconciliation permissions missing'; END IF;
             IF NOT has_table_privilege('authenticated','public.accounting_rules','INSERT') OR NOT has_table_privilege('authenticated','public.accounting_periods','UPDATE') THEN RAISE EXCEPTION 'Accounting permissions missing'; END IF;
             RAISE NOTICE 'OpsFinance migration and security catalog assertions passed';
           END $checks$;
@@ -87,6 +90,12 @@ jobs:
           END $behavior$;
           SET LOCAL ROLE authenticated;
           SELECT set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',true);
+          DO $behavior$
+          DECLARE new_business uuid;
+          BEGIN
+            new_business := public.create_business_with_owner('Synthetic Owner Company');
+            IF NOT EXISTS (SELECT 1 FROM public.business_members WHERE business_id=new_business AND user_id='11111111-1111-4111-8111-111111111111' AND role='OWNER') THEN RAISE EXCEPTION 'Business owner provisioning failed'; END IF;
+          END $behavior$;
           DO $behavior$
           DECLARE blocked boolean := false; n integer;
           BEGIN
@@ -159,6 +168,44 @@ jobs:
             IF NOT blocked THEN RAISE EXCEPTION 'Quota limit not enforced'; END IF;
             IF (SELECT count(*) FROM public.opsfinance_trial_usage WHERE trial_id='44444444-4444-4444-8444-444444444444') <> 30 THEN RAISE EXCEPTION 'Rejected quota write changed data'; END IF;
           END $behavior$;
+          INSERT INTO public.financial_accounts(id,business_id,name,type,account_code,currency,opening_balance,status)
+          VALUES ('88888888-8888-4888-8888-888888888888','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Synthetic Bank','BANK','SYNTHETIC-BANK','MYR',0,'ACTIVE');
+          SET LOCAL ROLE service_role;
+          DO $behavior$
+          DECLARE statement_data jsonb; row_data jsonb; first_result jsonb; retry_result jsonb; blocked boolean := false;
+          BEGIN
+            statement_data := jsonb_build_object(
+              'id','99999999-9999-4999-8999-999999999999','business_id','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+              'financial_account_id','88888888-8888-4888-8888-888888888888','file_name','synthetic.csv',
+              'opening_balance',0,'closing_balance',0,'uploaded_by','11111111-1111-4111-8111-111111111111');
+            row_data := jsonb_build_array(jsonb_build_object(
+              'id','66666666-6666-4666-8666-666666666666','bank_statement_id','99999999-9999-4999-8999-999999999999',
+              'transaction_date','2026-01-01','amount',10,'debit',0,'credit',10,'status','IMPORTED'));
+            first_result := public.opsfinance_trial_import_statement('11111111-1111-4111-8111-111111111111','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','55555555-5555-4555-8555-555555555555',now()+interval '1 day',statement_data,row_data,repeat('a',64));
+            retry_result := public.opsfinance_trial_import_statement('11111111-1111-4111-8111-111111111111','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','55555555-5555-4555-8555-555555555555',now()+interval '1 day',statement_data,row_data,repeat('a',64));
+            IF first_result IS DISTINCT FROM retry_result THEN RAISE EXCEPTION 'Import retry changed result'; END IF;
+            IF (SELECT count(*) FROM public.bank_transactions WHERE bank_statement_id='99999999-9999-4999-8999-999999999999') <> 1 OR
+               (SELECT count(*) FROM public.opsfinance_trial_usage WHERE trial_id='55555555-5555-4555-8555-555555555555') <> 1 THEN
+              RAISE EXCEPTION 'Import retry duplicated statement or quota';
+            END IF;
+            BEGIN
+              PERFORM public.opsfinance_trial_import_statement('11111111-1111-4111-8111-111111111111','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','55555555-5555-4555-8555-555555555555',now()+interval '1 day',statement_data,row_data,repeat('b',64));
+            EXCEPTION WHEN raise_exception THEN
+              IF SQLERRM NOT LIKE '%Statement retry identity mismatch%' THEN RAISE; END IF;
+              blocked := true;
+            END;
+            IF NOT blocked OR (SELECT count(*) FROM public.bank_transactions WHERE bank_statement_id='99999999-9999-4999-8999-999999999999') <> 1 THEN RAISE EXCEPTION 'Mismatched retry accepted or changed data'; END IF;
+            blocked := false;
+            statement_data := jsonb_set(statement_data,'{id}','"99999999-9999-4999-8999-999999999998"'::jsonb);
+            BEGIN
+              PERFORM public.opsfinance_trial_import_statement('11111111-1111-4111-8111-111111111111','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','55555555-5555-4555-8555-555555555555',now()+interval '1 day',statement_data,row_data,repeat('a',64));
+            EXCEPTION WHEN raise_exception THEN
+              IF SQLERRM NOT LIKE '%Invalid trial statement rows%' THEN RAISE; END IF;
+              blocked := true;
+            END;
+            IF NOT blocked OR (SELECT count(*) FROM public.opsfinance_trial_usage WHERE trial_id='55555555-5555-4555-8555-555555555555') <> 1 OR EXISTS (SELECT 1 FROM public.bank_statements WHERE id='99999999-9999-4999-8999-999999999998') THEN RAISE EXCEPTION 'Failed import did not roll back'; END IF;
+          END $behavior$;
+          RESET ROLE;
           -- Test the broker using only a disposable synthetic key in this transaction.
           UPDATE private.myops_broker_config SET enabled=true,key_hash=encode(sha256(convert_to(repeat('x',32),'UTF8')),'hex');
           SELECT set_config('request.headers','{}',true);
