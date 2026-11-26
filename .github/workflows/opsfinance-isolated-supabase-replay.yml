@@ -66,6 +66,69 @@ jobs:
             IF NOT has_table_privilege('authenticated','public.accounting_rules','INSERT') OR NOT has_table_privilege('authenticated','public.accounting_periods','UPDATE') THEN RAISE EXCEPTION 'Accounting permissions missing'; END IF;
             RAISE NOTICE 'OpsFinance migration and security catalog assertions passed';
           END $checks$;
+          BEGIN;
+          -- Disposable synthetic users are created through the real auth trigger.
+          INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES
+            ('11111111-1111-4111-8111-111111111111','finance-a@example.invalid','{"full_name":"Finance A"}'),
+            ('22222222-2222-4222-8222-222222222222','finance-b@example.invalid','{"full_name":"Finance B"}');
+          INSERT INTO public.businesses(id,name) VALUES
+            ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Finance A'),
+            ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','Finance B');
+          INSERT INTO public.business_members(business_id,user_id,role) VALUES
+            ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','11111111-1111-4111-8111-111111111111','OWNER'),
+            ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','22222222-2222-4222-8222-222222222222','OWNER');
+          INSERT INTO public.idempotency_keys(business_id,idempotency_key,result_id) VALUES
+            ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','synthetic-private-key','33333333-3333-4333-8333-333333333333');
+          DO $behavior$
+          BEGIN
+            IF (SELECT count(*) FROM public.users WHERE id IN ('11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222')) <> 2 THEN
+              RAISE EXCEPTION 'Auth profile trigger did not create two profiles';
+            END IF;
+          END $behavior$;
+          SET LOCAL ROLE authenticated;
+          SELECT set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',true);
+          DO $behavior$
+          DECLARE blocked boolean := false; n integer;
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM public.businesses WHERE id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa') THEN RAISE EXCEPTION 'Owner cannot read own business'; END IF;
+            IF EXISTS (SELECT 1 FROM public.businesses WHERE id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') THEN RAISE EXCEPTION 'Cross-tenant read permitted'; END IF;
+            UPDATE public.businesses SET phone='synthetic' WHERE id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+            GET DIAGNOSTICS n = ROW_COUNT;
+            IF n <> 1 THEN RAISE EXCEPTION 'Own business update denied'; END IF;
+            UPDATE public.businesses SET phone='unauthorized' WHERE id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+            GET DIAGNOSTICS n = ROW_COUNT;
+            IF n <> 0 THEN RAISE EXCEPTION 'Cross-tenant update permitted'; END IF;
+            BEGIN
+              INSERT INTO public.accounts(business_id,code,name,account_type,normal_balance) VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','security-test','unauthorized','ASSET','DEBIT');
+            EXCEPTION WHEN insufficient_privilege THEN blocked := true;
+            END;
+            IF NOT blocked THEN RAISE EXCEPTION 'Cross-tenant INSERT permitted'; END IF;
+            IF public.get_accounting_idempotency('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','synthetic-private-key') IS NOT NULL THEN RAISE EXCEPTION 'Cross-tenant idempotency leak'; END IF;
+          END $behavior$;
+          SELECT set_config('request.jwt.claim.sub','22222222-2222-4222-8222-222222222222',true);
+          DO $behavior$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM public.businesses WHERE id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') OR EXISTS (SELECT 1 FROM public.businesses WHERE id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa') THEN RAISE EXCEPTION 'Reverse tenant isolation failure'; END IF;
+            IF public.get_accounting_idempotency('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','synthetic-private-key') IS DISTINCT FROM '33333333-3333-4333-8333-333333333333'::uuid THEN RAISE EXCEPTION 'Owner idempotency denied'; END IF;
+          END $behavior$;
+          RESET ROLE;
+          DO $behavior$
+          DECLARE i integer; result jsonb; blocked boolean := false;
+          BEGIN
+            FOR i IN 1..30 LOOP
+              result := public.opsfinance_consume_trial_quota('44444444-4444-4444-8444-444444444444','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','transactions',('00000000-0000-4000-8000-' || lpad(i::text,12,'0'))::uuid,now()+interval '1 day');
+              IF (result->>'used')::integer <> i THEN RAISE EXCEPTION 'Quota count mismatch'; END IF;
+            END LOOP;
+            result := public.opsfinance_consume_trial_quota('44444444-4444-4444-8444-444444444444','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','transactions','00000000-0000-4000-8000-000000000001',now()+interval '1 day');
+            IF (result->>'replayed')::boolean IS NOT TRUE THEN RAISE EXCEPTION 'Quota retry not idempotent'; END IF;
+            BEGIN
+              PERFORM public.opsfinance_consume_trial_quota('44444444-4444-4444-8444-444444444444','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','transactions','00000000-0000-4000-8000-000000000031',now()+interval '1 day');
+            EXCEPTION WHEN raise_exception THEN blocked := true;
+            END;
+            IF NOT blocked THEN RAISE EXCEPTION 'Quota limit not enforced'; END IF;
+            IF (SELECT count(*) FROM public.opsfinance_trial_usage WHERE trial_id='44444444-4444-4444-8444-444444444444') <> 30 THEN RAISE EXCEPTION 'Rejected quota write changed data'; END IF;
+          END $behavior$;
+          ROLLBACK;
           SQL
       - name: Cleanup disposable Supabase
         if: always()
