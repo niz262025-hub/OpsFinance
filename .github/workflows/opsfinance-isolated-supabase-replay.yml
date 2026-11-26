@@ -141,7 +141,9 @@ jobs:
           DO $behavior$
           DECLARE journal_a uuid; account_b uuid; blocked boolean := false;
           BEGIN
-            SELECT id INTO journal_a FROM public.journal_entries WHERE business_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND journal_no='valid-journal';
+            INSERT INTO public.journal_entries(business_id,journal_no,journal_date,status)
+            VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','scope-check-draft',current_date,'DRAFT')
+            RETURNING id INTO journal_a;
             SELECT id INTO account_b FROM public.accounts WHERE business_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' ORDER BY code LIMIT 1;
             IF journal_a IS NULL OR account_b IS NULL THEN RAISE EXCEPTION 'Missing journal isolation fixture'; END IF;
             BEGIN
